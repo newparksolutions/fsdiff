@@ -8,6 +8,9 @@
 #include <string.h>
 #include <stdint.h>  /* For SIZE_MAX */
 
+/* Threshold for choosing sparse vs dense diff format */
+#define SPARSE_THRESHOLD_PER_BLOCK 512
+
 /**
  * Encode size_t as base-128 varint (little-endian).
  * Each byte uses bit 7 as continuation flag (1=more bytes, 0=last).
@@ -260,8 +263,8 @@ fsd_error_t fsd_op_encoder_encode(fsd_op_encoder_t *encoder,
                 }
             }
 
-            /* Use sparse if fewer than 512 non-zero bytes per block on average */
-            uint8_t diff_fmt = (nonzero_count < run_count * 512) ? 1 : 0;
+            /* Use sparse if fewer than threshold non-zero bytes per block on average */
+            uint8_t diff_fmt = (nonzero_count < run_count * SPARSE_THRESHOLD_PER_BLOCK) ? 1 : 0;
 
             /* Pre-calculate diff data to a temporary buffer so we know diff_len */
             /* Check for overflow in size calculation */

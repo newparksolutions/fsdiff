@@ -156,24 +156,24 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
     size_t block_size = 1ULL << header.block_size_log2;
 
     /* Validate stream lengths don't exceed patch file size */
-    if (patch_size < 32) {
+    if (patch_size < FSD_HEADER_SIZE) {
         fsd_mmap_close(patch_reader);
         fsd_mmap_close(src_reader);
         return FSD_ERR_TRUNCATED;
     }
-    if (header.op_stream_len > patch_size - 32) {
+    if (header.op_stream_len > patch_size - FSD_HEADER_SIZE) {
         fsd_mmap_close(patch_reader);
         fsd_mmap_close(src_reader);
         return FSD_ERR_CORRUPT_DATA;
     }
-    if (header.diff_stream_len > patch_size - 32 - header.op_stream_len) {
+    if (header.diff_stream_len > patch_size - FSD_HEADER_SIZE - header.op_stream_len) {
         fsd_mmap_close(patch_reader);
         fsd_mmap_close(src_reader);
         return FSD_ERR_CORRUPT_DATA;
     }
 
     /* Locate streams */
-    const uint8_t *op_stream = patch_data + 32;
+    const uint8_t *op_stream = patch_data + FSD_HEADER_SIZE;
     const uint8_t *op_end = op_stream + header.op_stream_len;
     const uint8_t *diff_stream = op_end;
     const uint8_t *diff_end = diff_stream + header.diff_stream_len;

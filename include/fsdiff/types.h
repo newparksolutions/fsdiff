@@ -24,6 +24,9 @@ extern "C" {
 /** File format version */
 #define FSD_VERSION             1
 
+/** BKDF header size in bytes */
+#define FSD_HEADER_SIZE         32
+
 /** Default block size (4 KiB) */
 #define FSD_DEFAULT_BLOCK_SIZE  4096
 
@@ -32,14 +35,6 @@ extern "C" {
 
 /** Maximum block size (1 MiB) */
 #define FSD_MAX_BLOCK_SIZE      (1 << 20)
-
-/** FFT coprime moduli */
-#define FSD_MODULUS_M1          1048576    /**< 2^20 */
-#define FSD_MODULUS_M2          531441     /**< 3^12 */
-#define FSD_MODULUS_M3          390625     /**< 5^8  */
-
-/** Product of moduli (~217 TB coverage) */
-#define FSD_MODULUS_PRODUCT     217629003912500000ULL
 
 /*===========================================================================
  * Enumerations

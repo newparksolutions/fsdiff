@@ -59,13 +59,13 @@ static int test_memory_read(void) {
     fclose(f);
 
     f = fopen(test_file, "rb");
-    size_t read_count = fread(buffer, 1, 32, f);
+    size_t read_count = fread(buffer, 1, FSD_HEADER_SIZE, f);
     fclose(f);
     TEST_ASSERT(read_count == 32, "Should read 32 bytes");
 
     /* Read from memory */
     fsd_header_t header;
-    fsd_error_t err = fsd_header_read_memory(buffer, 32, &header);
+    fsd_error_t err = fsd_header_read_memory(buffer, FSD_HEADER_SIZE, &header);
     TEST_ASSERT(err == FSD_SUCCESS, "Memory read should succeed");
 
     TEST_ASSERT(header.dest_blocks == 500, "Dest blocks from memory");

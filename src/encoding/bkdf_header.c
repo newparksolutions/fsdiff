@@ -39,7 +39,7 @@ fsd_error_t fsd_header_write(FILE *file,
         return FSD_ERR_INVALID_ARG;
     }
 
-    uint8_t header[32];
+    uint8_t header[FSD_HEADER_SIZE];
     memset(header, 0, sizeof(header));
 
     /* Magic: "BKDF" */
@@ -65,7 +65,7 @@ fsd_error_t fsd_header_write(FILE *file,
     /* Diff stream length (bytes 24-31) */
     write_u64_le(&header[24], diff_stream_len);
 
-    if (fwrite(header, 1, 32, file) != 32) {
+    if (fwrite(header, 1, FSD_HEADER_SIZE, file) != FSD_HEADER_SIZE) {
         return FSD_ERR_IO;
     }
 
@@ -77,18 +77,18 @@ fsd_error_t fsd_header_read(FILE *file, fsd_header_t *header_out) {
         return FSD_ERR_INVALID_ARG;
     }
 
-    uint8_t buf[32];
-    if (fread(buf, 1, 32, file) != 32) {
+    uint8_t buf[FSD_HEADER_SIZE];
+    if (fread(buf, 1, FSD_HEADER_SIZE, file) != FSD_HEADER_SIZE) {
         return FSD_ERR_TRUNCATED;
     }
 
-    return fsd_header_read_memory(buf, 32, header_out);
+    return fsd_header_read_memory(buf, FSD_HEADER_SIZE, header_out);
 }
 
 fsd_error_t fsd_header_read_memory(const void *data,
                                    size_t len,
                                    fsd_header_t *header_out) {
-    if (!data || len < 32 || !header_out) {
+    if (!data || len < FSD_HEADER_SIZE || !header_out) {
         return FSD_ERR_INVALID_ARG;
     }
 

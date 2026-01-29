@@ -54,7 +54,7 @@ static size_t write_varint(uint8_t *buf, size_t value) {
 /* Create BKDF header */
 static void write_header(uint8_t *buf, uint64_t dest_blocks,
                         uint64_t op_len, uint64_t diff_len) {
-    memset(buf, 0, 32);
+    memset(buf, 0, FSD_HEADER_SIZE);
     buf[0] = 'B';
     buf[1] = 'K';
     buf[2] = 'D';
@@ -82,7 +82,7 @@ static int test_copy_identity(void) {
 
     /* Header for 10 blocks */
     write_header(patch, 10, 0, 0);  /* No diff/literal streams */
-    pos = 32;
+    pos = FSD_HEADER_SIZE;
 
     size_t op_start = pos;
 
@@ -159,7 +159,7 @@ static int test_copy_relocate(void) {
 
     /* Header for 6 blocks */
     write_header(patch, 6, 0, 0);
-    pos = 32;
+    pos = FSD_HEADER_SIZE;
 
     size_t op_start = pos;
 
@@ -242,7 +242,7 @@ static int test_zero(void) {
 
     /* Header for 3 blocks */
     write_header(patch, 3, 0, 0);
-    pos = 32;
+    pos = FSD_HEADER_SIZE;
 
     size_t op_start = pos;
 
@@ -304,7 +304,7 @@ static int test_one(void) {
 
     /* Header for 2 blocks */
     write_header(patch, 2, 0, 0);
-    pos = 32;
+    pos = FSD_HEADER_SIZE;
 
     size_t op_start = pos;
 
@@ -367,7 +367,7 @@ static int test_literal(void) {
 
     /* Header for 2 blocks */
     write_header(patch, 2, 0, 0);
-    pos = 32;
+    pos = FSD_HEADER_SIZE;
 
     size_t op_start = pos;
 
@@ -438,7 +438,7 @@ static int test_copy_add_dense(void) {
 
     /* Header for 2 blocks */
     write_header(patch, 2, 0, 0);
-    pos = 32;
+    pos = FSD_HEADER_SIZE;
 
     size_t op_start = pos;
 
@@ -528,7 +528,7 @@ static int test_copy_add_sparse(void) {
 
     /* Header for 1 block */
     write_header(patch, 1, 0, 0);
-    pos = 32;
+    pos = FSD_HEADER_SIZE;
 
     size_t op_start = pos;
 
@@ -655,7 +655,7 @@ static int test_copy_add_negative(void) {
     /* Header for 3 blocks: block 0-1 identity, block 2 with negative offset
      * Block 2 will copy from byte position 2*512-256=768 (still positive) */
     write_header(patch, 3, 0, 0);
-    pos = 32;
+    pos = FSD_HEADER_SIZE;
 
     size_t op_start = pos;
 
@@ -757,7 +757,7 @@ static int test_copy_add_large_offsets(void) {
 
     /* Header for 1 block */
     write_header(patch, 1, 0, 0);
-    pos = 32;
+    pos = FSD_HEADER_SIZE;
 
     size_t op_start = pos;
 
@@ -837,7 +837,7 @@ static int test_mixed_operations(void) {
 
     /* Header for 6 blocks total */
     write_header(patch, 6, 0, 0);
-    pos = 32;
+    pos = FSD_HEADER_SIZE;
 
     size_t op_start = pos;
 
@@ -984,7 +984,7 @@ static int test_errors(void) {
     uint8_t bad_magic[64];
     write_header(bad_magic, 1, 1, 0);
     bad_magic[0] = 'X';  /* Corrupt magic */
-    bad_magic[32] = 0xF8;  /* OP_IDENTITY, inline count=1 */
+    bad_magic[FSD_HEADER_SIZE] = 0xF8;  /* OP_IDENTITY, inline count=1 */
 
     f = fopen("/tmp/test_bad_magic.bkdf", "wb");
     fwrite(bad_magic, 1, 33, f);
@@ -1002,7 +1002,7 @@ static int test_errors(void) {
     /* Test 2: OP_COPY_RELOCATE with invalid negative offset */
     uint8_t bad_reloc[256];
     write_header(bad_reloc, 1, 0, 0);
-    size_t bpos = 32;
+    size_t bpos = FSD_HEADER_SIZE;
     size_t bop_start = bpos;
 
     /* OP_COPY_RELOCATE: dest block 0, offset -5 (would give src block -5, invalid) */
@@ -1029,7 +1029,7 @@ static int test_errors(void) {
     /* Test 3: Unknown operation type (6-7 are reserved) */
     uint8_t unknown_op[64];
     write_header(unknown_op, 1, 1, 0);
-    size_t upos = 32;
+    size_t upos = FSD_HEADER_SIZE;
     unknown_op[upos++] = (6 << 5) | (3 << 3) | 0;  /* Reserved op type 6 */
 
     f = fopen("/tmp/test_unknown.bkdf", "wb");

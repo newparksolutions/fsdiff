@@ -252,7 +252,7 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
     ctx->stats.zero_blocks = tracker->zero_count;
     ctx->stats.one_blocks = tracker->one_count;
     ctx->stats.literal_blocks = tracker->literal_count;
-    ctx->stats.patch_size = 32 + op_size + diff_size + lit_size;
+    ctx->stats.patch_size = FSD_HEADER_SIZE + op_size + diff_size + lit_size;
     ctx->stats.elapsed_seconds = (double)(clock() - start_time) / CLOCKS_PER_SEC;
 
 cleanup:
