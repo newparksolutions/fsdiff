@@ -29,6 +29,7 @@ endmacro()
 fsdiff_add_test(test_crc32)
 fsdiff_add_test(test_memory_pool)
 fsdiff_add_test(test_block_tracker)
+fsdiff_add_test(test_simd)
 
 # I/O tests
 fsdiff_add_test(test_mmap_reader)
