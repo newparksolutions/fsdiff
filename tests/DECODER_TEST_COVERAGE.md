@@ -19,12 +19,12 @@ This test suite uses manually constructed BKDF binary data to verify the decoder
 **Coverage:**
 - 1-byte offset (enc=0), positive: offset +3
 - 1-byte offset (enc=0), negative: offset -2
-- 2-byte offset (enc=1), positive: offset +300
-- 4-byte offset (enc=2), negative: offset -100000
+- 2-byte offset (enc=1), positive: offset +5
+- 4-byte offset (enc=2), positive: offset +100
 - Inline count (enc=3): 1 block
 - 1-byte count (enc=0): 2 blocks
 
-**Verification:** Decoded without error (full verification would require larger src)
+**Verification:** Decoded without error
 
 #### 3. `test_zero()` - OP_ZERO (type 2)
 **Coverage:**
@@ -75,7 +75,8 @@ This test suite uses manually constructed BKDF binary data to verify the decoder
 #### 9. `test_copy_add_large_offsets()` - OP_COPY_ADD Large Offsets (type 4)
 **Coverage:**
 - 3-byte offset encoding (offset_enc=1): offset +40000
-- Inline count (count_enc=3)
+- 1-byte count encoding (count_enc=0): 1 block
+- Note: Inline count (enc=3) cannot be used for COPY_ADD (bits used for offset_enc+diff_fmt)
 - Large source files (100KB)
 
 **Verification:** Decoded without error

@@ -16,7 +16,7 @@ This format describes binary patches for block-oriented storage images (filesyst
 
 ```
 ┌─────────────────────────────┐
-│ Header (16 bytes)           │
+│ Header (32 bytes)           │
 ├─────────────────────────────┤
 │ Operation Stream            │
 │ (variable length)           │
