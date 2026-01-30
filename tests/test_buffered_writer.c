@@ -3,12 +3,11 @@
  * @brief Buffered writer tests
  */
 
-#define _GNU_SOURCE
 #include "io/buffered_writer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include "../src/platform.h"
 
 #define TEST_ASSERT(cond, msg) do { \
     if (!(cond)) { \
@@ -30,7 +29,7 @@ static int test_create_close(void) {
 
     fsd_writer_close(writer);
     fclose(f);  /* Close the FILE* since writer doesn't own it */
-    unlink(test_file);
+    fsd_unlink(test_file);
     return 0;
 }
 
@@ -55,7 +54,7 @@ static int test_write_byte(void) {
     }
     fclose(f);
 
-    unlink(test_file);
+    fsd_unlink(test_file);
     return 0;
 }
 
@@ -80,7 +79,7 @@ static int test_write_u16(void) {
     TEST_ASSERT(buf[0] == 0x34 && buf[1] == 0x12, "First u16 LE");
     TEST_ASSERT(buf[2] == 0xCD && buf[3] == 0xAB, "Second u16 LE");
 
-    unlink(test_file);
+    fsd_unlink(test_file);
     return 0;
 }
 
@@ -104,7 +103,7 @@ static int test_write_u32(void) {
     TEST_ASSERT(buf[0] == 0x78 && buf[1] == 0x56 &&
                 buf[2] == 0x34 && buf[3] == 0x12, "u32 LE");
 
-    unlink(test_file);
+    fsd_unlink(test_file);
     return 0;
 }
 
@@ -135,7 +134,7 @@ static int test_write_buffer(void) {
 
     TEST_ASSERT(size == 1024, "File size should be 1024");
 
-    unlink(test_file);
+    fsd_unlink(test_file);
     return 0;
 }
 
@@ -169,7 +168,7 @@ static int test_large_write(void) {
 
     TEST_ASSERT((size_t)size == total, "File size should be 1MB");
 
-    unlink(test_file);
+    fsd_unlink(test_file);
     return 0;
 }
 

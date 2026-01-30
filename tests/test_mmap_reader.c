@@ -3,12 +3,11 @@
  * @brief Memory-mapped reader tests
  */
 
-#define _GNU_SOURCE
 #include "io/mmap_reader.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include "../src/platform.h"
 
 #define TEST_ASSERT(cond, msg) do { \
     if (!(cond)) { \
@@ -41,7 +40,7 @@ static int create_test_file(size_t size, uint8_t pattern) {
 }
 
 static void cleanup_test_file(void) {
-    unlink(test_file);
+    fsd_unlink(test_file);
 }
 
 static int test_open_close(void) {

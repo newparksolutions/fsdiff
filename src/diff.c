@@ -3,8 +3,9 @@
  * @brief Public diff API implementation
  */
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
+/* Enable POSIX.1-2008 features (fdopen) before any includes */
+#if !defined(_WIN32) && !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
 #endif
 
 #include <fsdiff/fsdiff.h>

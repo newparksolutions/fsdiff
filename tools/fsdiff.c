@@ -9,10 +9,10 @@
  */
 
 #include <fsdiff/fsdiff.h>
+#include "../src/getopt_compat.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <getopt.h>
 
 static void print_usage(const char *prog) {
     fprintf(stderr, "fsdiff - Binary block-level diff/patch tool\n\n");

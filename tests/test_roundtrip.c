@@ -3,12 +3,11 @@
  * @brief End-to-end roundtrip tests
  */
 
-#define _GNU_SOURCE
 #include <fsdiff/fsdiff.h>
+#include "../src/platform.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #define TEST_ASSERT(cond, msg) do { \
     if (!(cond)) { \
@@ -23,10 +22,10 @@ static const char *patch_file = "/tmp/fsdiff_test.patch";
 static const char *output_file = "/tmp/fsdiff_test_out.bin";
 
 static void cleanup(void) {
-    unlink(src_file);
-    unlink(dest_file);
-    unlink(patch_file);
-    unlink(output_file);
+    fsd_unlink(src_file);
+    fsd_unlink(dest_file);
+    fsd_unlink(patch_file);
+    fsd_unlink(output_file);
 }
 
 static int create_file(const char *path, const uint8_t *data, size_t size) {

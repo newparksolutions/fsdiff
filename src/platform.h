@@ -1,6 +1,9 @@
 /**
  * @file platform.h
  * @brief Platform-specific compatibility wrappers
+ *
+ * NOTE: This header requires POSIX.1-2008 (_POSIX_C_SOURCE 200809L) on Unix.
+ * Including source files should define this before any includes.
  */
 
 #ifndef FSDIFF_PLATFORM_H
@@ -34,6 +37,11 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+
+/* Declare mkstemp if not already declared (POSIX.1-2008) */
+#if !defined(__USE_XOPEN2K8) && !defined(__APPLE__) && !defined(__FreeBSD__)
+extern int mkstemp(char *template);
+#endif
 
 /* Unix standard */
 #define fsd_unlink(path) unlink(path)

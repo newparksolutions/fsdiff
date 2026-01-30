@@ -3,9 +3,9 @@
  * @brief Memory-mapped file reader implementation
  */
 
-/* Required for madvise and MADV_SEQUENTIAL */
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
+/* Enable POSIX extensions for madvise (performance hint, optional) */
+#if defined(__linux__) || defined(__APPLE__)
+#define _POSIX_C_SOURCE 200809L
 #endif
 
 #include "mmap_reader.h"
@@ -145,8 +145,10 @@ fsd_error_t fsd_mmap_open(fsd_mmap_reader_t **reader_out, const char *path) {
         return FSD_ERR_MMAP_FAILED;
     }
 
-    /* Advise kernel about sequential access pattern */
-    madvise(reader->base_addr, reader->file_size, MADV_SEQUENTIAL);
+    /* Advise kernel about sequential access pattern (optional optimization) */
+#ifdef MADV_SEQUENTIAL
+    (void)madvise(reader->base_addr, reader->file_size, MADV_SEQUENTIAL);
+#endif
 #endif
 
     *reader_out = reader;

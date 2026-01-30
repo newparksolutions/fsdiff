@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <unistd.h>
+#include "../src/platform.h"
 
 #define BLOCK_SIZE 512  /* Minimum valid block size (2^9) */
 #define TEST_BLOCKS 20

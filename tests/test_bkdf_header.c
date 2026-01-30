@@ -3,11 +3,10 @@
  * @brief BKDF header read/write tests
  */
 
-#define _GNU_SOURCE
 #include "encoding/bkdf_header.h"
+#include "../src/platform.h"
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
 
 #define TEST_ASSERT(cond, msg) do { \
     if (!(cond)) { \
@@ -45,7 +44,7 @@ static int test_write_read(void) {
     TEST_ASSERT(header.op_stream_len == 5000, "Op stream len should be 5000");
     TEST_ASSERT(header.diff_stream_len == 2000, "Diff stream len should be 2000");
 
-    unlink(test_file);
+    fsd_unlink(test_file);
     return 0;
 }
 
@@ -71,7 +70,7 @@ static int test_memory_read(void) {
     TEST_ASSERT(header.dest_blocks == 500, "Dest blocks from memory");
     TEST_ASSERT(header.block_size_log2 == 14, "Block size from memory");
 
-    unlink(test_file);
+    fsd_unlink(test_file);
     return 0;
 }
 
@@ -91,7 +90,7 @@ static int test_invalid_magic(void) {
 
     TEST_ASSERT(err == FSD_ERR_BAD_MAGIC, "Should detect bad magic");
 
-    unlink(test_file);
+    fsd_unlink(test_file);
     return 0;
 }
 
@@ -109,7 +108,7 @@ static int test_truncated_header(void) {
 
     TEST_ASSERT(err == FSD_ERR_TRUNCATED, "Should detect truncated header");
 
-    unlink(test_file);
+    fsd_unlink(test_file);
     return 0;
 }
 
@@ -126,7 +125,7 @@ static int test_header_size(void) {
 
     TEST_ASSERT(size == 32, "Header should be exactly 32 bytes");
 
-    unlink(test_file);
+    fsd_unlink(test_file);
     return 0;
 }
 

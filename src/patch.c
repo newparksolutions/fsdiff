@@ -3,10 +3,6 @@
  * @brief Public patch API implementation
  */
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
 #include <fsdiff/fsdiff.h>
 #include "platform.h"
 #include "encoding/bkdf_header.h"

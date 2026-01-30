@@ -82,7 +82,17 @@ size_t fsd_avx2_count_matches(const uint8_t *a, const uint8_t *b, size_t len) {
         unsigned int mask = (unsigned int)_mm256_movemask_epi8(cmp);
 
         /* Count set bits = number of matching bytes */
-        count += (size_t)__builtin_popcount(mask);
+#if defined(_MSC_VER)
+        count += (size_t)__popcnt(mask);  /* MSVC intrinsic */
+#elif defined(__GNUC__) || defined(__clang__)
+        count += (size_t)__builtin_popcount(mask);  /* GCC/Clang intrinsic */
+#else
+        /* Portable fallback (should never happen with AVX2 support) */
+        while (mask) {
+            count += mask & 1;
+            mask >>= 1;
+        }
+#endif
     }
 
     /* Handle remaining bytes */
