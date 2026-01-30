@@ -15,10 +15,11 @@
 #include <stdio.h>
 #include <string.h>
 
-extern char *optarg;
-extern int optind;
-extern int opterr;
-extern int optopt;
+/* Note: Since this is header-only, each translation unit gets its own copy */
+static char *optarg = NULL;
+static int optind = 1;
+static int opterr = 1;
+static int optopt = 0;
 
 struct option {
     const char *name;
@@ -30,11 +31,6 @@ struct option {
 #define no_argument       0
 #define required_argument 1
 #define optional_argument 2
-
-static char *optarg = NULL;
-static int optind = 1;
-static int opterr = 1;
-static int optopt = 0;
 
 static int getopt_long(int argc, char *const argv[],
                       const char *optstring,

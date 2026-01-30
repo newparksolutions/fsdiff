@@ -16,10 +16,22 @@
     } \
 } while(0)
 
-static const char *src_file = "/tmp/fsdiff_test_src.bin";
-static const char *dest_file = "/tmp/fsdiff_test_dest.bin";
-static const char *patch_file = "/tmp/fsdiff_test.patch";
-static const char *output_file = "/tmp/fsdiff_test_out.bin";
+/* Platform-portable temp file paths */
+static char temp_dir[256];
+static char src_file[512];
+static char dest_file[512];
+static char patch_file[512];
+static char output_file[512];
+
+static void init_temp_paths(void) {
+    if (fsd_get_temp_dir(temp_dir) < 0) {
+        strcpy(temp_dir, ".");
+    }
+    snprintf(src_file, sizeof(src_file), "%s/fsdiff_test_src.bin", temp_dir);
+    snprintf(dest_file, sizeof(dest_file), "%s/fsdiff_test_dest.bin", temp_dir);
+    snprintf(patch_file, sizeof(patch_file), "%s/fsdiff_test.patch", temp_dir);
+    snprintf(output_file, sizeof(output_file), "%s/fsdiff_test_out.bin", temp_dir);
+}
 
 static void cleanup(void) {
     fsd_unlink(src_file);
@@ -307,6 +319,9 @@ int main(void) {
     int failures = 0;
 
     printf("Running roundtrip tests...\n");
+
+    /* Initialize temp file paths */
+    init_temp_paths();
 
     /* Initialize library */
     fsd_error_t err = fsd_init();

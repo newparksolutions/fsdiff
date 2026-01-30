@@ -60,6 +60,57 @@ extern int mkstemp(char *template);
 #endif
 
 /**
+ * Get platform-specific temporary directory path (without trailing separator).
+ *
+ * @param buf  Output buffer (must be at least 256 bytes)
+ * @return     0 on success, -1 on error
+ */
+static inline int fsd_get_temp_dir(char *buf) {
+#ifdef _WIN32
+    DWORD len = GetTempPathA(256, buf);
+    if (len == 0 || len >= 256) {
+        return -1;
+    }
+    /* Remove trailing backslash if present */
+    if (len > 0 && buf[len - 1] == '\\') {
+        buf[len - 1] = '\0';
+    }
+    return 0;
+#else
+    strcpy(buf, "/tmp");
+    return 0;
+#endif
+}
+
+/**
+ * Construct a path in the temp directory.
+ * Uses rotating buffers to allow multiple calls in same expression.
+ * Not thread-safe - for test use only.
+ *
+ * @param filename  Filename to append
+ * @return          Full path (static buffer, valid for next 4 calls)
+ */
+static inline const char *fsd_temp_path(const char *filename) {
+    static char path_bufs[4][512];
+    static int buf_index = 0;
+    static char temp_dir[256];
+    static int initialized = 0;
+
+    if (!initialized) {
+        if (fsd_get_temp_dir(temp_dir) < 0) {
+            strcpy(temp_dir, ".");
+        }
+        initialized = 1;
+    }
+
+    char *buf = path_bufs[buf_index];
+    buf_index = (buf_index + 1) % 4;
+
+    snprintf(buf, 512, "%s/%s", temp_dir, filename);
+    return buf;
+}
+
+/**
  * Create a temporary file in a platform-specific location.
  *
  * @param template_prefix  Prefix for temp file (e.g., "fsdiff_op")
@@ -80,7 +131,10 @@ static inline int fsd_create_temp_file(const char *template_prefix, char *path_o
         return -1;
     }
 
-    /* Open the file */
+    /* GetTempFileNameA creates the file, so delete it first then reopen with O_EXCL */
+    DeleteFileA(temp_path);
+
+    /* Open the file for read/write */
     int fd = fsd_open(temp_path, FSD_O_RDWR | FSD_O_CREAT | FSD_O_EXCL, FSD_MODE_RW);
     if (fd < 0) {
         return -1;

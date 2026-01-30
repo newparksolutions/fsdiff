@@ -104,12 +104,12 @@ static int test_copy_identity(void) {
     write_u64_le(&patch[16], op_len);
 
     /* Write patch file */
-    FILE *f = fopen("/tmp/test_identity.bkdf", "wb");
+    FILE *f = fopen(fsd_temp_path("test_identity.bkdf"), "wb");
     fwrite(patch, 1, pos, f);
     fclose(f);
 
     /* Write source file */
-    f = fopen("/tmp/test_identity_src.bin", "wb");
+    f = fopen(fsd_temp_path("test_identity_src.bin"), "wb");
     fwrite(src, 1, sizeof(src), f);
     fclose(f);
 
@@ -119,9 +119,9 @@ static int test_copy_identity(void) {
     fsd_patch_options_init(&opts);
     fsd_patch_create(&ctx, &opts);
 
-    fsd_error_t err = fsd_patch_apply(ctx, "/tmp/test_identity_src.bin",
-                                      "/tmp/test_identity.bkdf",
-                                      "/tmp/test_identity_out.bin");
+    fsd_error_t err = fsd_patch_apply(ctx, fsd_temp_path("test_identity_src.bin"),
+                                      fsd_temp_path("test_identity.bkdf"),
+                                      fsd_temp_path("test_identity_out.bin"));
     fsd_patch_destroy(ctx);
 
     if (err != FSD_SUCCESS) {
@@ -130,7 +130,7 @@ static int test_copy_identity(void) {
     }
 
     /* Verify output matches source */
-    f = fopen("/tmp/test_identity_out.bin", "rb");
+    f = fopen(fsd_temp_path("test_identity_out.bin"), "rb");
     uint8_t out[10 * BLOCK_SIZE];
     fread(out, 1, sizeof(out), f);
     fclose(f);
@@ -191,11 +191,11 @@ static int test_copy_relocate(void) {
     write_u64_le(&patch[16], op_len);
 
     /* Write files */
-    FILE *f = fopen("/tmp/test_relocate.bkdf", "wb");
+    FILE *f = fopen(fsd_temp_path("test_relocate.bkdf"), "wb");
     fwrite(patch, 1, pos, f);
     fclose(f);
 
-    f = fopen("/tmp/test_relocate_src.bin", "wb");
+    f = fopen(fsd_temp_path("test_relocate_src.bin"), "wb");
     fwrite(src, 1, sizeof(src), f);
     fclose(f);
 
@@ -205,9 +205,9 @@ static int test_copy_relocate(void) {
     fsd_patch_options_init(&opts);
     fsd_patch_create(&ctx, &opts);
 
-    fsd_error_t err = fsd_patch_apply(ctx, "/tmp/test_relocate_src.bin",
-                                      "/tmp/test_relocate.bkdf",
-                                      "/tmp/test_relocate_out.bin");
+    fsd_error_t err = fsd_patch_apply(ctx, fsd_temp_path("test_relocate_src.bin"),
+                                      fsd_temp_path("test_relocate.bkdf"),
+                                      fsd_temp_path("test_relocate_out.bin"));
     fsd_patch_destroy(ctx);
 
     if (err != FSD_SUCCESS) {
@@ -216,7 +216,7 @@ static int test_copy_relocate(void) {
     }
 
     /* Verify output */
-    f = fopen("/tmp/test_relocate_out.bin", "rb");
+    f = fopen(fsd_temp_path("test_relocate_out.bin"), "rb");
     uint8_t out[6 * BLOCK_SIZE];
     fread(out, 1, sizeof(out), f);
     fclose(f);
@@ -252,11 +252,11 @@ static int test_zero(void) {
     size_t op_len = pos - op_start;
     write_u64_le(&patch[16], op_len);
 
-    FILE *f = fopen("/tmp/test_zero.bkdf", "wb");
+    FILE *f = fopen(fsd_temp_path("test_zero.bkdf"), "wb");
     fwrite(patch, 1, pos, f);
     fclose(f);
 
-    f = fopen("/tmp/test_zero_src.bin", "wb");
+    f = fopen(fsd_temp_path("test_zero_src.bin"), "wb");
     fwrite(src, 1, sizeof(src), f);
     fclose(f);
 
@@ -265,9 +265,9 @@ static int test_zero(void) {
     fsd_patch_options_init(&opts);
     fsd_patch_create(&ctx, &opts);
 
-    fsd_error_t err = fsd_patch_apply(ctx, "/tmp/test_zero_src.bin",
-                                      "/tmp/test_zero.bkdf",
-                                      "/tmp/test_zero_out.bin");
+    fsd_error_t err = fsd_patch_apply(ctx, fsd_temp_path("test_zero_src.bin"),
+                                      fsd_temp_path("test_zero.bkdf"),
+                                      fsd_temp_path("test_zero_out.bin"));
     fsd_patch_destroy(ctx);
 
     if (err != FSD_SUCCESS) {
@@ -276,7 +276,7 @@ static int test_zero(void) {
     }
 
     /* Verify output is all zeros */
-    f = fopen("/tmp/test_zero_out.bin", "rb");
+    f = fopen(fsd_temp_path("test_zero_out.bin"), "rb");
     uint8_t out[3 * BLOCK_SIZE];
     fread(out, 1, sizeof(out), f);
     fclose(f);
@@ -315,11 +315,11 @@ static int test_one(void) {
     size_t op_len = pos - op_start;
     write_u64_le(&patch[16], op_len);
 
-    FILE *f = fopen("/tmp/test_one.bkdf", "wb");
+    FILE *f = fopen(fsd_temp_path("test_one.bkdf"), "wb");
     fwrite(patch, 1, pos, f);
     fclose(f);
 
-    f = fopen("/tmp/test_one_src.bin", "wb");
+    f = fopen(fsd_temp_path("test_one_src.bin"), "wb");
     fwrite(src, 1, sizeof(src), f);
     fclose(f);
 
@@ -328,9 +328,9 @@ static int test_one(void) {
     fsd_patch_options_init(&opts);
     fsd_patch_create(&ctx, &opts);
 
-    fsd_error_t err = fsd_patch_apply(ctx, "/tmp/test_one_src.bin",
-                                      "/tmp/test_one.bkdf",
-                                      "/tmp/test_one_out.bin");
+    fsd_error_t err = fsd_patch_apply(ctx, fsd_temp_path("test_one_src.bin"),
+                                      fsd_temp_path("test_one.bkdf"),
+                                      fsd_temp_path("test_one_out.bin"));
     fsd_patch_destroy(ctx);
 
     if (err != FSD_SUCCESS) {
@@ -339,7 +339,7 @@ static int test_one(void) {
     }
 
     /* Verify output is all 0xFF */
-    f = fopen("/tmp/test_one_out.bin", "rb");
+    f = fopen(fsd_temp_path("test_one_out.bin"), "rb");
     uint8_t out[2 * BLOCK_SIZE];
     fread(out, 1, sizeof(out), f);
     fclose(f);
@@ -382,11 +382,11 @@ static int test_literal(void) {
         patch[pos++] = (uint8_t)(i | 0x80);
     }
 
-    FILE *f = fopen("/tmp/test_literal.bkdf", "wb");
+    FILE *f = fopen(fsd_temp_path("test_literal.bkdf"), "wb");
     fwrite(patch, 1, pos, f);
     fclose(f);
 
-    f = fopen("/tmp/test_literal_src.bin", "wb");
+    f = fopen(fsd_temp_path("test_literal_src.bin"), "wb");
     fwrite(src, 1, sizeof(src), f);
     fclose(f);
 
@@ -395,9 +395,9 @@ static int test_literal(void) {
     fsd_patch_options_init(&opts);
     fsd_patch_create(&ctx, &opts);
 
-    fsd_error_t err = fsd_patch_apply(ctx, "/tmp/test_literal_src.bin",
-                                      "/tmp/test_literal.bkdf",
-                                      "/tmp/test_literal_out.bin");
+    fsd_error_t err = fsd_patch_apply(ctx, fsd_temp_path("test_literal_src.bin"),
+                                      fsd_temp_path("test_literal.bkdf"),
+                                      fsd_temp_path("test_literal_out.bin"));
     fsd_patch_destroy(ctx);
 
     if (err != FSD_SUCCESS) {
@@ -406,7 +406,7 @@ static int test_literal(void) {
     }
 
     /* Verify output matches literal data */
-    f = fopen("/tmp/test_literal_out.bin", "rb");
+    f = fopen(fsd_temp_path("test_literal_out.bin"), "rb");
     uint8_t out[2 * BLOCK_SIZE];
     fread(out, 1, sizeof(out), f);
     fclose(f);
@@ -471,11 +471,11 @@ static int test_copy_add_dense(void) {
     size_t diff_len = pos - diff_start;
     write_u64_le(&patch[24], diff_len);
 
-    FILE *f = fopen("/tmp/test_add_dense.bkdf", "wb");
+    FILE *f = fopen(fsd_temp_path("test_add_dense.bkdf"), "wb");
     fwrite(patch, 1, pos, f);
     fclose(f);
 
-    f = fopen("/tmp/test_add_dense_src.bin", "wb");
+    f = fopen(fsd_temp_path("test_add_dense_src.bin"), "wb");
     fwrite(src, 1, sizeof(src), f);
     fclose(f);
 
@@ -484,9 +484,9 @@ static int test_copy_add_dense(void) {
     fsd_patch_options_init(&opts);
     fsd_patch_create(&ctx, &opts);
 
-    fsd_error_t err = fsd_patch_apply(ctx, "/tmp/test_add_dense_src.bin",
-                                      "/tmp/test_add_dense.bkdf",
-                                      "/tmp/test_add_dense_out.bin");
+    fsd_error_t err = fsd_patch_apply(ctx, fsd_temp_path("test_add_dense_src.bin"),
+                                      fsd_temp_path("test_add_dense.bkdf"),
+                                      fsd_temp_path("test_add_dense_out.bin"));
     fsd_patch_destroy(ctx);
 
     if (err != FSD_SUCCESS) {
@@ -495,7 +495,7 @@ static int test_copy_add_dense(void) {
     }
 
     /* Verify output = src[offset+10..] + diff */
-    f = fopen("/tmp/test_add_dense_out.bin", "rb");
+    f = fopen(fsd_temp_path("test_add_dense_out.bin"), "rb");
     uint8_t out[2 * BLOCK_SIZE];
     fread(out, 1, sizeof(out), f);
     fclose(f);
@@ -591,11 +591,11 @@ static int test_copy_add_sparse(void) {
     /* Update diff_len in the operation */
     write_u32_le(&patch[diff_len_pos], (uint32_t)diff_len);
 
-    FILE *f = fopen("/tmp/test_add_sparse.bkdf", "wb");
+    FILE *f = fopen(fsd_temp_path("test_add_sparse.bkdf"), "wb");
     fwrite(patch, 1, pos, f);
     fclose(f);
 
-    f = fopen("/tmp/test_add_sparse_src.bin", "wb");
+    f = fopen(fsd_temp_path("test_add_sparse_src.bin"), "wb");
     fwrite(src, 1, sizeof(src), f);
     fclose(f);
 
@@ -604,9 +604,9 @@ static int test_copy_add_sparse(void) {
     fsd_patch_options_init(&opts);
     fsd_patch_create(&ctx, &opts);
 
-    fsd_error_t err = fsd_patch_apply(ctx, "/tmp/test_add_sparse_src.bin",
-                                      "/tmp/test_add_sparse.bkdf",
-                                      "/tmp/test_add_sparse_out.bin");
+    fsd_error_t err = fsd_patch_apply(ctx, fsd_temp_path("test_add_sparse_src.bin"),
+                                      fsd_temp_path("test_add_sparse.bkdf"),
+                                      fsd_temp_path("test_add_sparse_out.bin"));
     fsd_patch_destroy(ctx);
 
     if (err != FSD_SUCCESS) {
@@ -616,7 +616,7 @@ static int test_copy_add_sparse(void) {
     }
 
     /* Verify output */
-    f = fopen("/tmp/test_add_sparse_out.bin", "rb");
+    f = fopen(fsd_temp_path("test_add_sparse_out.bin"), "rb");
     uint8_t out[BLOCK_SIZE];
     fread(out, 1, sizeof(out), f);
     fclose(f);
@@ -691,11 +691,11 @@ static int test_copy_add_negative(void) {
     size_t diff_len = pos - diff_start;
     write_u64_le(&patch[24], diff_len);
 
-    FILE *f = fopen("/tmp/test_add_neg.bkdf", "wb");
+    FILE *f = fopen(fsd_temp_path("test_add_neg.bkdf"), "wb");
     fwrite(patch, 1, pos, f);
     fclose(f);
 
-    f = fopen("/tmp/test_add_neg_src.bin", "wb");
+    f = fopen(fsd_temp_path("test_add_neg_src.bin"), "wb");
     fwrite(src, 1, sizeof(src), f);
     fclose(f);
 
@@ -704,9 +704,9 @@ static int test_copy_add_negative(void) {
     fsd_patch_options_init(&opts);
     fsd_patch_create(&ctx, &opts);
 
-    fsd_error_t err = fsd_patch_apply(ctx, "/tmp/test_add_neg_src.bin",
-                                      "/tmp/test_add_neg.bkdf",
-                                      "/tmp/test_add_neg_out.bin");
+    fsd_error_t err = fsd_patch_apply(ctx, fsd_temp_path("test_add_neg_src.bin"),
+                                      fsd_temp_path("test_add_neg.bkdf"),
+                                      fsd_temp_path("test_add_neg_out.bin"));
     fsd_patch_destroy(ctx);
 
     if (err != FSD_SUCCESS) {
@@ -715,7 +715,7 @@ static int test_copy_add_negative(void) {
     }
 
     /* Verify: blocks 0-1 should be identity, block 2 should be src[768..1279] */
-    f = fopen("/tmp/test_add_neg_out.bin", "rb");
+    f = fopen(fsd_temp_path("test_add_neg_out.bin"), "rb");
     uint8_t out[3 * BLOCK_SIZE];
     size_t read_size = fread(out, 1, sizeof(out), f);
     fclose(f);
@@ -792,11 +792,11 @@ static int test_copy_add_large_offsets(void) {
     size_t diff_len = pos - diff_start;
     write_u64_le(&patch[24], diff_len);
 
-    FILE *f = fopen("/tmp/test_add_large.bkdf", "wb");
+    FILE *f = fopen(fsd_temp_path("test_add_large.bkdf"), "wb");
     fwrite(patch, 1, pos, f);
     fclose(f);
 
-    f = fopen("/tmp/test_add_large_src.bin", "wb");
+    f = fopen(fsd_temp_path("test_add_large_src.bin"), "wb");
     fwrite(src, 1, src_size, f);
     fclose(f);
 
@@ -805,9 +805,9 @@ static int test_copy_add_large_offsets(void) {
     fsd_patch_options_init(&opts);
     fsd_patch_create(&ctx, &opts);
 
-    fsd_error_t err = fsd_patch_apply(ctx, "/tmp/test_add_large_src.bin",
-                                      "/tmp/test_add_large.bkdf",
-                                      "/tmp/test_add_large_out.bin");
+    fsd_error_t err = fsd_patch_apply(ctx, fsd_temp_path("test_add_large_src.bin"),
+                                      fsd_temp_path("test_add_large.bkdf"),
+                                      fsd_temp_path("test_add_large_out.bin"));
     fsd_patch_destroy(ctx);
 
     if (err != FSD_SUCCESS) {
@@ -882,11 +882,11 @@ static int test_mixed_operations(void) {
         patch[pos++] = 0xAA;
     }
 
-    FILE *f = fopen("/tmp/test_mixed.bkdf", "wb");
+    FILE *f = fopen(fsd_temp_path("test_mixed.bkdf"), "wb");
     fwrite(patch, 1, pos, f);
     fclose(f);
 
-    f = fopen("/tmp/test_mixed_src.bin", "wb");
+    f = fopen(fsd_temp_path("test_mixed_src.bin"), "wb");
     fwrite(src, 1, sizeof(src), f);
     fclose(f);
 
@@ -895,9 +895,9 @@ static int test_mixed_operations(void) {
     fsd_patch_options_init(&opts);
     fsd_patch_create(&ctx, &opts);
 
-    fsd_error_t err = fsd_patch_apply(ctx, "/tmp/test_mixed_src.bin",
-                                      "/tmp/test_mixed.bkdf",
-                                      "/tmp/test_mixed_out.bin");
+    fsd_error_t err = fsd_patch_apply(ctx, fsd_temp_path("test_mixed_src.bin"),
+                                      fsd_temp_path("test_mixed.bkdf"),
+                                      fsd_temp_path("test_mixed_out.bin"));
     fsd_patch_destroy(ctx);
 
     if (err != FSD_SUCCESS) {
@@ -906,7 +906,7 @@ static int test_mixed_operations(void) {
     }
 
     /* Verify output */
-    f = fopen("/tmp/test_mixed_out.bin", "rb");
+    f = fopen(fsd_temp_path("test_mixed_out.bin"), "rb");
     uint8_t out[6 * BLOCK_SIZE];
     fread(out, 1, sizeof(out), f);
     fclose(f);
@@ -971,7 +971,7 @@ static int test_errors(void) {
     uint8_t src[BLOCK_SIZE];
     memset(src, 0, sizeof(src));
 
-    FILE *f = fopen("/tmp/test_src_err.bin", "wb");
+    FILE *f = fopen(fsd_temp_path("test_src_err.bin"), "wb");
     fwrite(src, 1, sizeof(src), f);
     fclose(f);
 
@@ -986,13 +986,13 @@ static int test_errors(void) {
     bad_magic[0] = 'X';  /* Corrupt magic */
     bad_magic[FSD_HEADER_SIZE] = 0xF8;  /* OP_IDENTITY, inline count=1 */
 
-    f = fopen("/tmp/test_bad_magic.bkdf", "wb");
+    f = fopen(fsd_temp_path("test_bad_magic.bkdf"), "wb");
     fwrite(bad_magic, 1, 33, f);
     fclose(f);
 
-    fsd_error_t err = fsd_patch_apply(ctx, "/tmp/test_src_err.bin",
-                                      "/tmp/test_bad_magic.bkdf",
-                                      "/tmp/test_out_err.bin");
+    fsd_error_t err = fsd_patch_apply(ctx, fsd_temp_path("test_src_err.bin"),
+                                      fsd_temp_path("test_bad_magic.bkdf"),
+                                      fsd_temp_path("test_out_err.bin"));
     if (err != FSD_ERR_BAD_MAGIC) {
         fprintf(stderr, "    FAIL: expected FSD_ERR_BAD_MAGIC, got %s\n", fsd_strerror(err));
         fsd_patch_destroy(ctx);
@@ -1012,13 +1012,13 @@ static int test_errors(void) {
     size_t bop_len = bpos - bop_start;
     write_u64_le(&bad_reloc[16], bop_len);
 
-    f = fopen("/tmp/test_bad_reloc.bkdf", "wb");
+    f = fopen(fsd_temp_path("test_bad_reloc.bkdf"), "wb");
     fwrite(bad_reloc, 1, bpos, f);
     fclose(f);
 
-    err = fsd_patch_apply(ctx, "/tmp/test_src_err.bin",
-                          "/tmp/test_bad_reloc.bkdf",
-                          "/tmp/test_out_err.bin");
+    err = fsd_patch_apply(ctx, fsd_temp_path("test_src_err.bin"),
+                          fsd_temp_path("test_bad_reloc.bkdf"),
+                          fsd_temp_path("test_out_err.bin"));
     if (err != FSD_ERR_CORRUPT_DATA) {
         fprintf(stderr, "    FAIL: expected FSD_ERR_CORRUPT_DATA for invalid offset, got %s\n",
                 fsd_strerror(err));
@@ -1032,13 +1032,13 @@ static int test_errors(void) {
     size_t upos = FSD_HEADER_SIZE;
     unknown_op[upos++] = (6 << 5) | (3 << 3) | 0;  /* Reserved op type 6 */
 
-    f = fopen("/tmp/test_unknown.bkdf", "wb");
+    f = fopen(fsd_temp_path("test_unknown.bkdf"), "wb");
     fwrite(unknown_op, 1, upos, f);
     fclose(f);
 
-    err = fsd_patch_apply(ctx, "/tmp/test_src_err.bin",
-                          "/tmp/test_unknown.bkdf",
-                          "/tmp/test_out_err.bin");
+    err = fsd_patch_apply(ctx, fsd_temp_path("test_src_err.bin"),
+                          fsd_temp_path("test_unknown.bkdf"),
+                          fsd_temp_path("test_out_err.bin"));
     if (err != FSD_ERR_BAD_OPERATION) {
         fprintf(stderr, "    FAIL: expected FSD_ERR_BAD_OPERATION, got %s\n", fsd_strerror(err));
         fsd_patch_destroy(ctx);

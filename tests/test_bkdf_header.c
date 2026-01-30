@@ -15,7 +15,15 @@
     } \
 } while(0)
 
-static const char *test_file = "/tmp/fsdiff_test_header.bin";
+static char test_file[512];
+
+static void init_temp_path(void) {
+    char temp_dir[256];
+    if (fsd_get_temp_dir(temp_dir) < 0) {
+        strcpy(temp_dir, ".");
+    }
+    snprintf(test_file, sizeof(test_file), "%s/fsdiff_test_header.bin", temp_dir);
+}
 
 static int test_write_read(void) {
     /* Write header */
@@ -133,6 +141,8 @@ int main(void) {
     int failures = 0;
 
     printf("Running BKDF header tests...\n");
+
+    init_temp_path();
 
     failures += test_write_read();
     failures += test_memory_read();
