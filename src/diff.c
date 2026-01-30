@@ -8,6 +8,7 @@
 #endif
 
 #include <fsdiff/fsdiff.h>
+#include "platform.h"
 #include "stages/stage_controller.h"
 #include "encoding/bkdf_header.h"
 #include "encoding/operation_encoder.h"
@@ -16,7 +17,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h>
 
 struct fsd_diff_ctx {
     fsd_diff_options_t opts;
@@ -135,18 +135,18 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
     fsd_block_tracker_t *tracker = fsd_stage_controller_get_tracker(controller);
 
     /* Create temporary files for streams */
-    char op_tmp[] = "/tmp/fsdiff_op_XXXXXX";
-    char diff_tmp[] = "/tmp/fsdiff_diff_XXXXXX";
-    char lit_tmp[] = "/tmp/fsdiff_lit_XXXXXX";
+    char op_tmp[256];
+    char diff_tmp[256];
+    char lit_tmp[256];
 
-    int op_fd = mkstemp(op_tmp);
-    int diff_fd = mkstemp(diff_tmp);
-    int lit_fd = mkstemp(lit_tmp);
+    int op_fd = fsd_create_temp_file("fsdiff_op", op_tmp);
+    int diff_fd = fsd_create_temp_file("fsdiff_diff", diff_tmp);
+    int lit_fd = fsd_create_temp_file("fsdiff_lit", lit_tmp);
 
     if (op_fd < 0 || diff_fd < 0 || lit_fd < 0) {
-        if (op_fd >= 0) { close(op_fd); unlink(op_tmp); }
-        if (diff_fd >= 0) { close(diff_fd); unlink(diff_tmp); }
-        if (lit_fd >= 0) { close(lit_fd); unlink(lit_tmp); }
+        if (op_fd >= 0) { fsd_close(op_fd); fsd_unlink(op_tmp); }
+        if (diff_fd >= 0) { fsd_close(diff_fd); fsd_unlink(diff_tmp); }
+        if (lit_fd >= 0) { fsd_close(lit_fd); fsd_unlink(lit_tmp); }
         fsd_stage_controller_destroy(controller);
         fsd_mmap_close(dest_reader);
         fsd_mmap_close(src_reader);
@@ -158,12 +158,12 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
     FILE *lit_file = fdopen(lit_fd, "w+b");
 
     if (!op_file || !diff_file || !lit_file) {
-        if (op_file) fclose(op_file); else if (op_fd >= 0) close(op_fd);
-        if (diff_file) fclose(diff_file); else if (diff_fd >= 0) close(diff_fd);
-        if (lit_file) fclose(lit_file); else if (lit_fd >= 0) close(lit_fd);
-        unlink(op_tmp);
-        unlink(diff_tmp);
-        unlink(lit_tmp);
+        if (op_file) fclose(op_file); else if (op_fd >= 0) fsd_close(op_fd);
+        if (diff_file) fclose(diff_file); else if (diff_fd >= 0) fsd_close(diff_fd);
+        if (lit_file) fclose(lit_file); else if (lit_fd >= 0) fsd_close(lit_fd);
+        fsd_unlink(op_tmp);
+        fsd_unlink(diff_tmp);
+        fsd_unlink(lit_tmp);
         fsd_stage_controller_destroy(controller);
         fsd_mmap_close(dest_reader);
         fsd_mmap_close(src_reader);

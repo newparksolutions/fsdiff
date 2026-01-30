@@ -8,12 +8,12 @@
 #endif
 
 #include <fsdiff/fsdiff.h>
+#include "platform.h"
 #include "encoding/bkdf_header.h"
 #include "io/mmap_reader.h"
 #include "simd/simd_dispatch.h"
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 struct fsd_patch_ctx {
     fsd_patch_options_t opts;
@@ -479,7 +479,7 @@ error:
     fsd_mmap_close(src_reader);
 
     if (err != FSD_SUCCESS) {
-        unlink(output_path);
+        fsd_unlink(output_path);
     }
 
     return err;

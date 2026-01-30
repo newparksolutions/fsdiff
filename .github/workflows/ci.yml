@@ -39,35 +39,48 @@ jobs:
             simd: no-simd
             cmake_flags: "-DFSDIFF_ENABLE_SIMD=OFF"
 
+          # Windows x64 with SIMD
+          - os: windows-x64
+            runner: windows-latest
+            simd: with-simd
+            cmake_flags: ""
+
+          # Windows x64 without SIMD
+          - os: windows-x64
+            runner: windows-latest
+            simd: no-simd
+            cmake_flags: "-DFSDIFF_ENABLE_SIMD=OFF"
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install build tools
+      - name: Install build tools (Linux)
+        if: runner.os != 'Windows'
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake
 
       - name: Configure CMake
         run: |
-          mkdir -p build
-          cd build
-          cmake .. ${{ matrix.cmake_flags }}
+          cmake -B build -S . ${{ matrix.cmake_flags }}
 
       - name: Build
         run: |
-          cd build
-          make -j$(nproc)
+          cmake --build build --config Release --parallel
 
       - name: Run tests
         run: |
           cd build
-          ctest --output-on-failure
+          ctest --output-on-failure -C Release
 
-      - name: Display SIMD backend
+      - name: Display build info
+        shell: bash
         run: |
           cd build
-          ./bin/fsdiff --version
-          if [ -f ./bin/test_roundtrip ]; then
-            echo "Tests completed successfully"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            ./Release/fsdiff.exe --version || ./bin/Release/fsdiff.exe --version || echo "fsdiff binary not found"
+          else
+            ./bin/fsdiff --version
           fi
+          echo "All tests completed successfully"

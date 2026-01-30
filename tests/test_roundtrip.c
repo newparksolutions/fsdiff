@@ -198,6 +198,52 @@ static int test_zero_blocks(void) {
     return 0;
 }
 
+static int test_one_blocks(void) {
+    printf("  Testing one blocks...\n");
+
+    /* Source: random pattern, Dest: mix of 0xFF blocks and pattern */
+    size_t size = 4096 * 5;
+    uint8_t *src_data = malloc(size);
+    uint8_t *dest_data = malloc(size);
+
+    for (size_t i = 0; i < size; i++) {
+        src_data[i] = (uint8_t)(i & 0xFF);
+    }
+
+    /* Mix of 0xFF blocks and pattern */
+    memset(dest_data, 0xFF, 4096 * 2);  /* First 2 blocks all 0xFF */
+    for (size_t i = 4096 * 2; i < size; i++) {
+        dest_data[i] = (uint8_t)(i & 0xFF);
+    }
+
+    create_file(src_file, src_data, size);
+    create_file(dest_file, dest_data, size);
+    free(src_data);
+    free(dest_data);
+
+    /* Diff and patch */
+    fsd_diff_ctx_t *diff_ctx = NULL;
+    fsd_diff_create(&diff_ctx, NULL);
+    fsd_diff_files(diff_ctx, src_file, dest_file, patch_file);
+
+    fsd_diff_stats_t stats;
+    fsd_diff_get_stats(diff_ctx, &stats);
+    TEST_ASSERT(stats.one_blocks >= 2, "Should detect one blocks");
+
+    fsd_diff_destroy(diff_ctx);
+
+    fsd_patch_ctx_t *patch_ctx = NULL;
+    fsd_patch_create(&patch_ctx, NULL);
+    fsd_patch_apply(patch_ctx, src_file, patch_file, output_file);
+    fsd_patch_destroy(patch_ctx);
+
+    int cmp = compare_files(dest_file, output_file);
+    TEST_ASSERT(cmp == 0, "Output should match destination");
+
+    cleanup();
+    return 0;
+}
+
 static int test_relocated_blocks(void) {
     printf("  Testing relocated blocks...\n");
 
@@ -273,6 +319,7 @@ int main(void) {
     failures += test_identical_files();
     failures += test_different_files();
     failures += test_zero_blocks();
+    failures += test_one_blocks();
     failures += test_relocated_blocks();
 
     fsd_cleanup();
