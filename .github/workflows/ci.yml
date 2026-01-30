@@ -51,6 +51,60 @@ jobs:
             cc: clang
             cxx: clang++
 
+          # Ubuntu x64 GCC-10 with SIMD
+          - os: ubuntu-x64
+            runner: ubuntu-22.04
+            compiler: gcc-10
+            simd: with-simd
+            cmake_flags: ""
+            cc: gcc-10
+            cxx: g++-10
+
+          # Ubuntu x64 GCC-10 without SIMD
+          - os: ubuntu-x64
+            runner: ubuntu-22.04
+            compiler: gcc-10
+            simd: no-simd
+            cmake_flags: "-DFSDIFF_ENABLE_SIMD=OFF"
+            cc: gcc-10
+            cxx: g++-10
+
+          # Ubuntu x64 GCC-14 with SIMD
+          - os: ubuntu-x64
+            runner: ubuntu-24.04
+            compiler: gcc-14
+            simd: with-simd
+            cmake_flags: ""
+            cc: gcc-14
+            cxx: g++-14
+
+          # Ubuntu x64 GCC-14 without SIMD
+          - os: ubuntu-x64
+            runner: ubuntu-24.04
+            compiler: gcc-14
+            simd: no-simd
+            cmake_flags: "-DFSDIFF_ENABLE_SIMD=OFF"
+            cc: gcc-14
+            cxx: g++-14
+
+          # Ubuntu x64 Clang-15 with SIMD
+          - os: ubuntu-x64
+            runner: ubuntu-22.04
+            compiler: clang-15
+            simd: with-simd
+            cmake_flags: ""
+            cc: clang-15
+            cxx: clang++-15
+
+          # Ubuntu x64 Clang-15 without SIMD
+          - os: ubuntu-x64
+            runner: ubuntu-22.04
+            compiler: clang-15
+            simd: no-simd
+            cmake_flags: "-DFSDIFF_ENABLE_SIMD=OFF"
+            cc: clang-15
+            cxx: clang++-15
+
           # ARM with SIMD
           - os: arm
             runner: ARM_Runner
@@ -91,7 +145,17 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake clang
+          if [ "${{ matrix.compiler }}" = "gcc-10" ]; then
+            sudo apt-get install -y cmake gcc-10 g++-10
+          elif [ "${{ matrix.compiler }}" = "gcc-14" ]; then
+            sudo apt-get install -y cmake gcc-14 g++-14
+          elif [ "${{ matrix.compiler }}" = "clang-15" ]; then
+            sudo apt-get install -y cmake clang-15
+          elif [ "${{ matrix.compiler }}" = "clang" ]; then
+            sudo apt-get install -y build-essential cmake clang
+          else
+            sudo apt-get install -y build-essential cmake
+          fi
 
       - name: Configure CMake
         env:
