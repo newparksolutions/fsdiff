@@ -3,8 +3,8 @@
  * @brief fsdiff command-line tool
  *
  * Usage:
- *   fsdiff create <source> <destination> <patch>
- *   fsdiff apply <source> <patch> <output>
+ *   fsdiff delta <source> <destination> <patch>
+ *   fsdiff patch <source> <patch> <output>
  *   fsdiff info <patch>
  */
 
@@ -17,16 +17,16 @@
 static void print_usage(const char *prog) {
     fprintf(stderr, "fsdiff - Binary block-level diff/patch tool\n\n");
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "  %s create [options] <source> <destination> <patch>\n", prog);
-    fprintf(stderr, "  %s apply [options] <source> <patch> <output>\n", prog);
+    fprintf(stderr, "  %s delta [options] <source> <destination> <patch>\n", prog);
+    fprintf(stderr, "  %s patch [options] <source> <patch> <output>\n", prog);
     fprintf(stderr, "  %s info <patch>\n", prog);
     fprintf(stderr, "\n");
     fprintf(stderr, "Commands:\n");
-    fprintf(stderr, "  create    Generate a patch file from source to destination\n");
-    fprintf(stderr, "  apply     Apply a patch file to source, creating output\n");
+    fprintf(stderr, "  delta    Generate a patch file from source to destination\n");
+    fprintf(stderr, "  patch     Apply a patch file to source, creating output\n");
     fprintf(stderr, "  info      Display information about a patch file\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "Create options:\n");
+    fprintf(stderr, "Delta options:\n");
     fprintf(stderr, "  -b, --block-size <log2>   Block size as power of 2 (default: 12 = 4096)\n");
     fprintf(stderr, "  -r, --search-radius <n>   Search radius for relocation (default: 8)\n");
     fprintf(stderr, "  -p, --projections <n>     Number of FFT projections (default: 1)\n");
@@ -38,13 +38,13 @@ static void print_usage(const char *prog) {
     fprintf(stderr, "  -v, --verbose             Show progress and statistics\n");
     fprintf(stderr, "  -V, --very-verbose        Detailed output from all matching stages\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "Apply options:\n");
+    fprintf(stderr, "Patch options:\n");
     fprintf(stderr, "  --verify                  Verify output checksum if available\n");
     fprintf(stderr, "  -v, --verbose             Show progress\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Examples:\n");
-    fprintf(stderr, "  %s create fs_v1.img fs_v2.img update.patch\n", prog);
-    fprintf(stderr, "  %s apply fs_v1.img update.patch fs_v2_rebuilt.img\n", prog);
+    fprintf(stderr, "  %s delta fs_v1.img fs_v2.img update.patch\n", prog);
+    fprintf(stderr, "  %s patch fs_v1.img update.patch fs_v2_rebuilt.img\n", prog);
     fprintf(stderr, "  %s info update.patch\n", prog);
 }
 
@@ -127,7 +127,7 @@ static int cmd_create(int argc, char **argv) {
     }
 
     if (optind + 3 != argc) {
-        fprintf(stderr, "Error: create requires <source> <destination> <patch>\n");
+        fprintf(stderr, "Error: delta requires <source> <destination> <patch>\n");
         return 1;
     }
 
@@ -310,9 +310,9 @@ int main(int argc, char **argv) {
     const char *cmd = argv[1];
     int result;
 
-    if (strcmp(cmd, "create") == 0) {
+    if (strcmp(cmd, "delta") == 0) {
         result = cmd_create(argc - 1, argv + 1);
-    } else if (strcmp(cmd, "apply") == 0) {
+    } else if (strcmp(cmd, "patch") == 0) {
         result = cmd_apply(argc - 1, argv + 1);
     } else if (strcmp(cmd, "info") == 0) {
         result = cmd_info(argc - 2, argv + 2);
