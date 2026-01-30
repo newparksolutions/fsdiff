@@ -8,46 +8,78 @@ on:
 
 jobs:
   build-and-test:
-    name: ${{ matrix.os }} - ${{ matrix.simd }}
+    name: ${{ matrix.os }} - ${{ matrix.compiler }} - ${{ matrix.simd }}
     runs-on: ${{ matrix.runner }}
 
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Ubuntu x64 with SIMD
+          # Ubuntu x64 GCC with SIMD
           - os: ubuntu-x64
             runner: ubuntu-latest
+            compiler: gcc
             simd: with-simd
             cmake_flags: ""
+            cc: gcc
+            cxx: g++
 
-          # Ubuntu x64 without SIMD
+          # Ubuntu x64 GCC without SIMD
           - os: ubuntu-x64
             runner: ubuntu-latest
+            compiler: gcc
             simd: no-simd
             cmake_flags: "-DFSDIFF_ENABLE_SIMD=OFF"
+            cc: gcc
+            cxx: g++
+
+          # Ubuntu x64 Clang with SIMD
+          - os: ubuntu-x64
+            runner: ubuntu-latest
+            compiler: clang
+            simd: with-simd
+            cmake_flags: ""
+            cc: clang
+            cxx: clang++
+
+          # Ubuntu x64 Clang without SIMD
+          - os: ubuntu-x64
+            runner: ubuntu-latest
+            compiler: clang
+            simd: no-simd
+            cmake_flags: "-DFSDIFF_ENABLE_SIMD=OFF"
+            cc: clang
+            cxx: clang++
 
           # ARM with SIMD
           - os: arm
             runner: ARM_Runner
+            compiler: gcc
             simd: with-simd
             cmake_flags: ""
+            cc: gcc
+            cxx: g++
 
           # ARM without SIMD
           - os: arm
             runner: ARM_Runner
+            compiler: gcc
             simd: no-simd
             cmake_flags: "-DFSDIFF_ENABLE_SIMD=OFF"
+            cc: gcc
+            cxx: g++
 
           # Windows x64 with SIMD
           - os: windows-x64
             runner: windows-latest
+            compiler: msvc
             simd: with-simd
             cmake_flags: ""
 
           # Windows x64 without SIMD
           - os: windows-x64
             runner: windows-latest
+            compiler: msvc
             simd: no-simd
             cmake_flags: "-DFSDIFF_ENABLE_SIMD=OFF"
 
@@ -59,9 +91,12 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake
+          sudo apt-get install -y build-essential cmake clang
 
       - name: Configure CMake
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
         run: |
           cmake -B build -S . ${{ matrix.cmake_flags }}
 
@@ -76,7 +111,12 @@ jobs:
 
       - name: Display build info
         shell: bash
+        env:
+          CC: ${{ matrix.cc }}
         run: |
+          if [ "$RUNNER_OS" != "Windows" ]; then
+            echo "Compiler: $($CC --version | head -1)"
+          fi
           cd build
           if [ "$RUNNER_OS" = "Windows" ]; then
             ./Release/fsdiff.exe --version || ./bin/Release/fsdiff.exe --version || echo "fsdiff binary not found"
