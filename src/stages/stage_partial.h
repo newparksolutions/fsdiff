@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 JL Finance Limited
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /**
  * @file stage_partial.h
  * @brief Stage 3: FFT-based partial matching for approximate block matches

@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 JL Finance Limited
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /**
  * @file stage_relocation.h
  * @brief Stage 2: Relocation matching - find blocks moved to different positions

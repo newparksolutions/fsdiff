@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 JL Finance Limited
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /**
  * @file patch.c
  * @brief Public patch API implementation
@@ -360,8 +365,11 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
                 goto error;
             }
 
-            const uint8_t *diff_data = diff_ptr;
-            diff_ptr += diff_len;
+            /* diff_cursor: local pointer that advances through this operation's diff data
+             * diff_ptr: global stream position, advanced to end of this operation's data */
+            const uint8_t *diff_cursor = diff_ptr;
+            const uint8_t *diff_region_end = diff_ptr + diff_len;
+            diff_ptr = diff_region_end;
 
             /* Process each block */
             for (uint64_t blk = 0; blk < count; blk++) {
@@ -380,13 +388,13 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
                 if (diff_fmt == 0) {
                     /* Dense format: one diff byte per output byte */
                     size_t blk_offset = blk * block_size;
-                    /* Validate diff_data bounds */
+                    /* Validate diff_cursor bounds */
                     if (blk_offset + block_size > diff_len) {
                         err = FSD_ERR_TRUNCATED;
                         goto error;
                     }
                     for (size_t k = 0; k < block_size; k++) {
-                        block_buf[k] += diff_data[blk_offset + k];
+                        block_buf[k] += diff_cursor[blk_offset + k];
                     }
                 } else {
                     /* Sparse format: alternating copy-add/copy runs with base-128 lengths */
@@ -394,23 +402,26 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
                     while (out_pos < block_size) {
                         /* Copy-add mode: read varint length */
                         size_t add_len;
-                        err = read_varint(&diff_data, diff_ptr, &add_len);
+                        err = read_varint(&diff_cursor, diff_region_end, &add_len);
                         if (err != FSD_SUCCESS) goto error;
 
-                        /* Apply diff values */
-                        if (diff_data + add_len > diff_ptr) {
+                        /* Apply diff values - must consume all add_len bytes to maintain stream alignment */
+                        if (diff_cursor + add_len > diff_region_end) {
                             err = FSD_ERR_TRUNCATED;
                             goto error;
                         }
-                        for (size_t k = 0; k < add_len && out_pos < block_size; k++) {
-                            block_buf[out_pos++] += *diff_data++;
+                        for (size_t k = 0; k < add_len; k++) {
+                            uint8_t diff_val = *diff_cursor++;
+                            if (out_pos < block_size) {
+                                block_buf[out_pos++] += diff_val;
+                            }
                         }
 
                         if (out_pos >= block_size) break;
 
                         /* Copy mode: read varint length */
                         size_t copy_len;
-                        err = read_varint(&diff_data, diff_ptr, &copy_len);
+                        err = read_varint(&diff_cursor, diff_region_end, &copy_len);
                         if (err != FSD_SUCCESS) goto error;
 
                         /* Advance output position */

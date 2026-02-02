@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 JL Finance Limited
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /**
  * @file mmap_reader.h
  * @brief Memory-mapped file reader for large files

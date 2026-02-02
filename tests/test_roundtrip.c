@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 JL Finance Limited
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /**
  * @file test_roundtrip.c
  * @brief End-to-end roundtrip tests

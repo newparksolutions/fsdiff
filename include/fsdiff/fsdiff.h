@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 JL Finance Limited
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 /**
  * @file fsdiff.h
  * @brief Main header for fsdiff library - filesystem binary diff/patch

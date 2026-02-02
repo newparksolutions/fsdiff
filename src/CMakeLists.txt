@@ -109,8 +109,8 @@ if(FSDIFF_BUILD_STATIC)
     add_library(fsdiff_static STATIC ${FSDIFF_ALL_OBJECTS})
 
     set_target_properties(fsdiff_static PROPERTIES
-        OUTPUT_NAME fsdiff
-        ARCHIVE_OUTPUT_NAME fsdiff
+        OUTPUT_NAME fsdiff$<$<PLATFORM_ID:Windows>:_static>
+        ARCHIVE_OUTPUT_NAME fsdiff$<$<PLATFORM_ID:Windows>:_static>
     )
 
     target_include_directories(fsdiff_static
