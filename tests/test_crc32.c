@@ -43,14 +43,32 @@ static int test_incremental(void) {
     /* Full computation */
     uint32_t full_crc = fsd_crc32((const uint8_t *)data, len);
 
-    /* Incremental computation */
-    uint32_t inc_crc = 0;
+    /* Incremental: byte-at-a-time */
+    uint32_t inc_crc = ~0U;
     for (size_t i = 0; i < len; i++) {
         inc_crc = fsd_crc32_update(inc_crc, (const uint8_t *)&data[i], 1);
     }
     inc_crc = fsd_crc32_final(inc_crc);
 
-    TEST_ASSERT(full_crc == inc_crc, "Incremental CRC should match full CRC");
+    TEST_ASSERT(full_crc == inc_crc, "Byte-at-a-time incremental CRC should match full CRC");
+    return 0;
+}
+
+static int test_incremental_chunks(void) {
+    /* Test multi-chunk incremental against known value */
+    const char *data = "123456789";
+
+    /* Split "123456789" into "1234" + "56789" */
+    uint32_t crc = ~0U;
+    crc = fsd_crc32_update(crc, (const uint8_t *)data, 4);
+    crc = fsd_crc32_update(crc, (const uint8_t *)data + 4, 5);
+    crc = fsd_crc32_final(crc);
+
+    TEST_ASSERT(crc == 0xCBF43926, "Chunked incremental should match known IEEE CRC32");
+
+    /* Also verify it matches single-shot */
+    uint32_t full_crc = fsd_crc32((const uint8_t *)data, 9);
+    TEST_ASSERT(crc == full_crc, "Chunked incremental should match single-shot");
     return 0;
 }
 
@@ -91,6 +109,7 @@ int main(void) {
     failures += test_empty();
     failures += test_known_values();
     failures += test_incremental();
+    failures += test_incremental_chunks();
     failures += test_different_data();
     failures += test_block_crc();
 

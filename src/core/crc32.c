@@ -80,7 +80,6 @@ static const uint32_t crc32_table[256] = {
 
 uint32_t fsd_crc32_update(uint32_t crc, const void *data, size_t len) {
     const uint8_t *buf = (const uint8_t *)data;
-    crc = ~crc;
 
     while (len >= 8) {
         crc = crc32_table[(crc ^ buf[0]) & 0xFF] ^ (crc >> 8);
@@ -99,14 +98,13 @@ uint32_t fsd_crc32_update(uint32_t crc, const void *data, size_t len) {
         crc = crc32_table[(crc ^ *buf++) & 0xFF] ^ (crc >> 8);
     }
 
-    return ~crc;
+    return crc;
 }
 
 uint32_t fsd_crc32(const void *data, size_t len) {
-    return fsd_crc32_update(0, data, len);
+    return fsd_crc32_final(fsd_crc32_update(~0U, data, len));
 }
 
 uint32_t fsd_crc32_final(uint32_t crc) {
-    /* Already finalized in update function */
-    return crc;
+    return ~crc;
 }

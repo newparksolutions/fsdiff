@@ -87,9 +87,9 @@ fsd_error_t fsd_relocation_stage_build_index(fsd_relocation_stage_t *stage,
 
         /* Progress update */
         if (stage->verbose && (i % 100000 == 0 || i == stage->src_blocks - 1)) {
+            int pct = (stage->src_blocks > 0) ? (int)((i * 100) / stage->src_blocks) : 100;
             fprintf(stderr, "\r[Relocation] Indexing block %lu/%lu (%d%%)",
-                    (unsigned long)i, (unsigned long)stage->src_blocks,
-                    (int)((i * 100) / stage->src_blocks));
+                    (unsigned long)i, (unsigned long)stage->src_blocks, pct);
             fflush(stderr);
         }
 
@@ -148,10 +148,10 @@ fsd_error_t fsd_relocation_stage_run(fsd_relocation_stage_t *stage,
 
         /* Progress update */
         if (stage->verbose && (unmatched_processed % 10000 == 0 || unmatched_processed == unmatched_total)) {
+            int pct = (unmatched_total > 0) ? (int)((unmatched_processed * 100) / unmatched_total) : 100;
             fprintf(stderr, "\r[Relocation] Block %lu/%lu (%d%%) - %lu matches found",
                     (unsigned long)unmatched_processed, (unsigned long)unmatched_total,
-                    (int)((unmatched_processed * 100) / unmatched_total),
-                    (unsigned long)relocate_count);
+                    pct, (unsigned long)relocate_count);
             fflush(stderr);
         }
 

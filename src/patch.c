@@ -20,7 +20,7 @@ struct fsd_patch_ctx {
     fsd_patch_options_t opts;
     fsd_progress_fn progress_cb;
     void *progress_user_data;
-    volatile int cancelled;
+    FSD_ATOMIC int cancelled;
 };
 
 void fsd_patch_options_init(fsd_patch_options_t *opts) {
@@ -105,8 +105,8 @@ static fsd_error_t read_count(const uint8_t **ptr, const uint8_t *end,
         break;
     case 2:  /* 4 bytes LE follow */
         if (*ptr + 4 > end) return FSD_ERR_TRUNCATED;
-        *count_out = (uint64_t)((*ptr)[0] | ((*ptr)[1] << 8) |
-                                ((*ptr)[2] << 16) | ((*ptr)[3] << 24));
+        *count_out = (uint32_t)(*ptr)[0] | ((uint32_t)(*ptr)[1] << 8) |
+                     ((uint32_t)(*ptr)[2] << 16) | ((uint32_t)(*ptr)[3] << 24);
         *ptr += 4;
         break;
     case 3:  /* Inline: bits[2:0] + 1 */
@@ -250,8 +250,8 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
                 break;
             case 2:
                 if (op_ptr + 4 > op_end) { err = FSD_ERR_TRUNCATED; goto error; }
-                offset = op_ptr[0] | (op_ptr[1] << 8) |
-                        (op_ptr[2] << 16) | (op_ptr[3] << 24);
+                offset = (uint32_t)op_ptr[0] | ((uint32_t)op_ptr[1] << 8) |
+                        ((uint32_t)op_ptr[2] << 16) | ((uint32_t)op_ptr[3] << 24);
                 op_ptr += 4;
                 break;
             }
@@ -344,8 +344,8 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
                 break;
             case 2:
                 if (op_ptr + 4 > op_end) { err = FSD_ERR_TRUNCATED; goto error; }
-                count = (uint64_t)(op_ptr[0] | (op_ptr[1] << 8) |
-                                   (op_ptr[2] << 16) | (op_ptr[3] << 24));
+                count = (uint32_t)op_ptr[0] | ((uint32_t)op_ptr[1] << 8) |
+                        ((uint32_t)op_ptr[2] << 16) | ((uint32_t)op_ptr[3] << 24);
                 op_ptr += 4;
                 break;
             case 3:
@@ -355,8 +355,8 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
 
             /* Read diff_len */
             if (op_ptr + 4 > op_end) { err = FSD_ERR_TRUNCATED; goto error; }
-            uint32_t diff_len = op_ptr[0] | (op_ptr[1] << 8) |
-                               (op_ptr[2] << 16) | (op_ptr[3] << 24);
+            uint32_t diff_len = (uint32_t)op_ptr[0] | ((uint32_t)op_ptr[1] << 8) |
+                               ((uint32_t)op_ptr[2] << 16) | ((uint32_t)op_ptr[3] << 24);
             op_ptr += 4;
 
             /* Check diff stream bounds */
@@ -538,6 +538,9 @@ fsd_error_t fsd_patch_output_size(const char *patch_path,
         return err;
     }
 
+    /* NOTE: This multiplication can overflow size_t on 32-bit platforms
+     * for large images. Fixing properly requires an API change (e.g. uint64_t
+     * output parameter). Callers on 32-bit should check for overflow. */
     *size_out = header.dest_blocks * (1ULL << header.block_size_log2);
     return FSD_SUCCESS;
 }
@@ -552,7 +555,7 @@ void fsd_patch_set_progress(fsd_patch_ctx_t *ctx,
 
 void fsd_patch_cancel(fsd_patch_ctx_t *ctx) {
     if (ctx) {
-        ctx->cancelled = 1;
+        fsd_atomic_store(ctx->cancelled, 1);
     }
 }
 
@@ -585,22 +588,22 @@ const char *fsd_strerror(fsd_error_t err) {
 }
 
 /* Library initialization */
-static int g_initialized = 0;
+static FSD_ATOMIC int g_initialized = 0;
 
 fsd_error_t fsd_init(void) {
-    if (g_initialized) {
+    if (fsd_atomic_load(g_initialized)) {
         return FSD_SUCCESS;
     }
 
-    /* Initialize SIMD dispatch */
+    /* Initialize SIMD dispatch (idempotent - safe if two threads race here) */
     fsd_simd_init();
 
-    g_initialized = 1;
+    fsd_atomic_store(g_initialized, 1);
     return FSD_SUCCESS;
 }
 
 void fsd_cleanup(void) {
-    g_initialized = 0;
+    fsd_atomic_store(g_initialized, 0);
 }
 
 const char *fsd_version(void) {
@@ -608,10 +611,10 @@ const char *fsd_version(void) {
 }
 
 const char *fsd_build_info(void) {
-#if defined(__GNUC__)
-    return "GCC " __VERSION__;
-#elif defined(__clang__)
+#if defined(__clang__)
     return "Clang " __clang_version__;
+#elif defined(__GNUC__)
+    return "GCC " __VERSION__;
 #elif defined(__INTEL_COMPILER)
     return "ICC";
 #else

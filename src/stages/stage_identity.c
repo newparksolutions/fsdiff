@@ -114,9 +114,9 @@ fsd_error_t fsd_identity_stage_run(fsd_identity_stage_t *stage,
 
         /* Progress update */
         if (stage->verbose && (i % 100000 == 0 || i == common_blocks - 1)) {
+            int pct = (dest_blocks > 0) ? (int)((i * 100) / dest_blocks) : 100;
             fprintf(stderr, "\r[Identity] Block %lu/%lu (%d%%)",
-                    (unsigned long)i, (unsigned long)dest_blocks,
-                    (int)((i * 100) / dest_blocks));
+                    (unsigned long)i, (unsigned long)dest_blocks, pct);
             fflush(stderr);
         }
 
@@ -153,9 +153,9 @@ fsd_error_t fsd_identity_stage_run(fsd_identity_stage_t *stage,
 
         /* Progress update */
         if (stage->verbose && (i % 100000 == 0 || i == dest_blocks - 1)) {
+            int pct = (dest_blocks > 0) ? (int)((i * 100) / dest_blocks) : 100;
             fprintf(stderr, "\r[Identity] Block %lu/%lu (%d%%)",
-                    (unsigned long)i, (unsigned long)dest_blocks,
-                    (int)((i * 100) / dest_blocks));
+                    (unsigned long)i, (unsigned long)dest_blocks, pct);
             fflush(stderr);
         }
 

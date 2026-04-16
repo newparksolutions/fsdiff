@@ -56,7 +56,7 @@ static void print_usage(const char *prog) {
 static void progress_callback(void *user_data, uint64_t current, uint64_t total) {
     int *verbose = (int *)user_data;
     if (*verbose) {
-        int percent = (int)((current * 100) / total);
+        int percent = (total > 0) ? (int)((current * 100) / total) : 100;
         fprintf(stderr, "\rProgress: %d%% (%lu / %lu blocks)",
                 percent, (unsigned long)current, (unsigned long)total);
         if (current == total) {
@@ -90,8 +90,8 @@ static int cmd_create(int argc, char **argv) {
         switch (opt) {
         case 'b':
             opts.block_size_log2 = atoi(optarg);
-            if (opts.block_size_log2 < 9 || opts.block_size_log2 > 20) {
-                fprintf(stderr, "Error: block-size must be between 9 and 20\n");
+            if (opts.block_size_log2 < 5 || opts.block_size_log2 > 24) {
+                fprintf(stderr, "Error: block-size must be between 5 and 24\n");
                 return 1;
             }
             break;
@@ -170,24 +170,25 @@ static int cmd_create(int argc, char **argv) {
 
         fprintf(stderr, "\nStatistics:\n");
         fprintf(stderr, "  Total blocks:      %lu\n", (unsigned long)stats.total_blocks);
+        double tb = (stats.total_blocks > 0) ? (double)stats.total_blocks : 1.0;
         fprintf(stderr, "  Identity matches:  %lu (%.1f%%)\n",
                 (unsigned long)stats.identity_matches,
-                100.0 * stats.identity_matches / stats.total_blocks);
+                100.0 * stats.identity_matches / tb);
         fprintf(stderr, "  Relocate matches:  %lu (%.1f%%)\n",
                 (unsigned long)stats.relocate_matches,
-                100.0 * stats.relocate_matches / stats.total_blocks);
+                100.0 * stats.relocate_matches / tb);
         fprintf(stderr, "  Partial matches:   %lu (%.1f%%)\n",
                 (unsigned long)stats.partial_matches,
-                100.0 * stats.partial_matches / stats.total_blocks);
+                100.0 * stats.partial_matches / tb);
         fprintf(stderr, "  Zero blocks:       %lu (%.1f%%)\n",
                 (unsigned long)stats.zero_blocks,
-                100.0 * stats.zero_blocks / stats.total_blocks);
+                100.0 * stats.zero_blocks / tb);
         fprintf(stderr, "  One blocks:        %lu (%.1f%%)\n",
                 (unsigned long)stats.one_blocks,
-                100.0 * stats.one_blocks / stats.total_blocks);
+                100.0 * stats.one_blocks / tb);
         fprintf(stderr, "  Literal blocks:    %lu (%.1f%%)\n",
                 (unsigned long)stats.literal_blocks,
-                100.0 * stats.literal_blocks / stats.total_blocks);
+                100.0 * stats.literal_blocks / tb);
         fprintf(stderr, "  Patch size:        %lu bytes\n", (unsigned long)stats.patch_size);
         fprintf(stderr, "  Time:              %.2f seconds\n", stats.elapsed_seconds);
     }

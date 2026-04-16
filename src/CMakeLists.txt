@@ -16,7 +16,6 @@ set(FSDIFF_CORE_SOURCES
     stages/stage_controller.c
     encoding/bkdf_header.c
     encoding/operation_encoder.c
-    encoding/stream_writer.c
     simd/simd_dispatch.c
     simd/projection_scalar.c
     diff.c

@@ -116,7 +116,7 @@ fsd_error_t fsd_stage_controller_run(fsd_stage_controller_t *ctrl,
      * Compare blocks at same positions, also detect zero/one blocks
      */
     if (ctrl->enable_identity && ctrl->identity) {
-        if (ctrl->cancelled) return FSD_ERR_CANCELLED;
+        if (fsd_atomic_load(ctrl->cancelled)) return FSD_ERR_CANCELLED;
 
         err = fsd_identity_stage_run(ctrl->identity,
                                      ctrl->tracker,
@@ -139,7 +139,7 @@ fsd_error_t fsd_stage_controller_run(fsd_stage_controller_t *ctrl,
      * Build hash table of source blocks, look up unmatched dest blocks
      */
     if (ctrl->enable_relocation && ctrl->relocation) {
-        if (ctrl->cancelled) return FSD_ERR_CANCELLED;
+        if (fsd_atomic_load(ctrl->cancelled)) return FSD_ERR_CANCELLED;
 
         /* Build source block index */
         err = fsd_relocation_stage_build_index(ctrl->relocation, src_data);
@@ -165,7 +165,7 @@ fsd_error_t fsd_stage_controller_run(fsd_stage_controller_t *ctrl,
      * Find approximate matches for remaining unmatched blocks
      */
     if (ctrl->enable_partial && ctrl->partial) {
-        if (ctrl->cancelled) return FSD_ERR_CANCELLED;
+        if (fsd_atomic_load(ctrl->cancelled)) return FSD_ERR_CANCELLED;
 
         /* Build FFT index */
         err = fsd_partial_stage_build_index(ctrl->partial,
@@ -214,7 +214,7 @@ void fsd_stage_controller_set_progress(fsd_stage_controller_t *ctrl,
 
 void fsd_stage_controller_cancel(fsd_stage_controller_t *ctrl) {
     if (ctrl) {
-        ctrl->cancelled = 1;
+        fsd_atomic_store(ctrl->cancelled, 1);
     }
 }
 

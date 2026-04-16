@@ -29,7 +29,7 @@ struct fsd_diff_ctx {
     fsd_diff_stats_t stats;
     fsd_progress_fn progress_cb;
     void *progress_user_data;
-    volatile int cancelled;
+    FSD_ATOMIC int cancelled;
 };
 
 void fsd_diff_options_init(fsd_diff_options_t *opts) {
@@ -64,6 +64,12 @@ fsd_error_t fsd_diff_create(fsd_diff_ctx_t **ctx_out,
         ctx->opts = *opts;
     } else {
         fsd_diff_options_init(&ctx->opts);
+    }
+
+    /* Validate block size range */
+    if (ctx->opts.block_size_log2 < 5 || ctx->opts.block_size_log2 > 24) {
+        free(ctx);
+        return FSD_ERR_BAD_BLOCK_SIZE;
     }
 
     ctx->progress_cb = NULL;
@@ -263,16 +269,16 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
 
 cleanup:
     fsd_op_encoder_destroy(encoder);
+    /* Transfer FILE ownership to writers so fsd_writer_close handles fclose */
+    if (op_writer) op_writer->owns_file = true;
+    if (diff_writer) diff_writer->owns_file = true;
+    if (lit_writer) lit_writer->owns_file = true;
     fsd_writer_close(op_writer);
     fsd_writer_close(diff_writer);
     fsd_writer_close(lit_writer);
-    /* Close the FILE handles - fclose also closes the underlying fd from fdopen */
-    if (op_file) fclose(op_file);
-    if (diff_file) fclose(diff_file);
-    if (lit_file) fclose(lit_file);
-    unlink(op_tmp);
-    unlink(diff_tmp);
-    unlink(lit_tmp);
+    fsd_unlink(op_tmp);
+    fsd_unlink(diff_tmp);
+    fsd_unlink(lit_tmp);
     fsd_stage_controller_destroy(controller);
     fsd_mmap_close(dest_reader);
     fsd_mmap_close(src_reader);
@@ -308,7 +314,7 @@ void fsd_diff_set_progress(fsd_diff_ctx_t *ctx,
 
 void fsd_diff_cancel(fsd_diff_ctx_t *ctx) {
     if (ctx) {
-        ctx->cancelled = 1;
+        fsd_atomic_store(ctx->cancelled, 1);
     }
 }
 

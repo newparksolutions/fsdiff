@@ -17,6 +17,21 @@
 #include <string.h>
 #include <stdio.h>
 
+/*===========================================================================
+ * Atomic operations
+ *===========================================================================*/
+#if !defined(__STDC_NO_ATOMICS__)
+#include <stdatomic.h>
+#define FSD_ATOMIC _Atomic
+#define fsd_atomic_load(x) atomic_load(&(x))
+#define fsd_atomic_store(x, v) atomic_store(&(x), (v))
+#else
+/* Fallback for compilers without C11 atomics */
+#define FSD_ATOMIC volatile
+#define fsd_atomic_load(x) (x)
+#define fsd_atomic_store(x, v) ((x) = (v))
+#endif
+
 #ifdef _WIN32
 #include <windows.h>
 #include <io.h>
@@ -130,18 +145,16 @@ static inline int fsd_create_temp_file(const char *template_prefix, char *path_o
         return -1;
     }
 
-    /* Generate unique filename */
+    /* Generate unique filename (GetTempFileNameA atomically creates the file) */
     char temp_path[MAX_PATH];
     if (GetTempFileNameA(temp_dir, template_prefix, 0, temp_path) == 0) {
         return -1;
     }
 
-    /* GetTempFileNameA creates the file, so delete it first then reopen with O_EXCL */
-    DeleteFileA(temp_path);
-
-    /* Open the file for read/write */
-    int fd = fsd_open(temp_path, FSD_O_RDWR | FSD_O_CREAT | FSD_O_EXCL, FSD_MODE_RW);
+    /* Open the file already created by GetTempFileNameA for read/write */
+    int fd = fsd_open(temp_path, FSD_O_RDWR | FSD_O_TRUNC, FSD_MODE_RW);
     if (fd < 0) {
+        DeleteFileA(temp_path);
         return -1;
     }
 

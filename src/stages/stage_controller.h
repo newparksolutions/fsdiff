@@ -14,6 +14,7 @@
 #include <fsdiff/types.h>
 #include <fsdiff/error.h>
 #include <fsdiff/options.h>
+#include "../platform.h"
 #include "../core/block_tracker.h"
 #include "../core/memory_pool.h"
 #include "stage_identity.h"
@@ -45,7 +46,7 @@ typedef struct fsd_stage_controller {
     fsd_memory_pool_t *pool;
 
     /* State */
-    volatile int cancelled;
+    FSD_ATOMIC int cancelled;
 
     /* Progress */
     fsd_progress_fn progress_cb;

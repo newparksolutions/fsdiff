@@ -35,11 +35,11 @@ extern "C" {
 /** Default block size (4 KiB) */
 #define FSD_DEFAULT_BLOCK_SIZE  4096
 
-/** Minimum block size (512 bytes) */
-#define FSD_MIN_BLOCK_SIZE      512
+/** Minimum block size (32 bytes) */
+#define FSD_MIN_BLOCK_SIZE      (1 << 5)
 
-/** Maximum block size (1 MiB) */
-#define FSD_MAX_BLOCK_SIZE      (1 << 20)
+/** Maximum block size (16 MiB) */
+#define FSD_MAX_BLOCK_SIZE      (1 << 24)
 
 /*===========================================================================
  * Enumerations

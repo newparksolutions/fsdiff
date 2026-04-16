@@ -188,7 +188,7 @@ fsd_error_t fsd_partial_stage_run(fsd_partial_stage_t *stage,
         /* Progress update */
         if (stage->verbose && (unmatched_processed % 100 == 0 ||
             unmatched_processed == unmatched_total)) {
-            int pct = (int)((unmatched_processed * 100) / unmatched_total);
+            int pct = (unmatched_total > 0) ? (int)((unmatched_processed * 100) / unmatched_total) : 100;
             fprintf(stderr, "\r[Partial] Block %lu/%lu (%d%%) - %lu matches, %lu extended",
                     (unsigned long)unmatched_processed,
                     (unsigned long)unmatched_total,

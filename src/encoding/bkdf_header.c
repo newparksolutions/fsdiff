@@ -111,7 +111,7 @@ fsd_error_t fsd_header_read_memory(const void *data,
 
     /* Check block size */
     uint8_t block_size_log2 = buf[5];
-    if (block_size_log2 < 9 || block_size_log2 > 20) {
+    if (block_size_log2 < 5 || block_size_log2 > 24) {
         return FSD_ERR_BAD_BLOCK_SIZE;
     }
 
