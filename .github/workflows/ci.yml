@@ -20,9 +20,10 @@ jobs:
             runner: ubuntu-latest
             compiler: gcc
             simd: with-simd
-            cmake_flags: ""
+            cmake_flags: "-DCMAKE_EXE_LINKER_FLAGS=-static"
             cc: gcc
             cxx: g++
+            artifact_name: fsdiff-linux-x64
 
           # Ubuntu x64 GCC without SIMD
           - os: ubuntu-x64
@@ -105,21 +106,51 @@ jobs:
             cc: clang-15
             cxx: clang++-15
 
-          # ARM with SIMD
-          - os: arm
-            runner: ARM_Runner
+          # Ubuntu x64 patch-only
+          - os: ubuntu-x64
+            runner: ubuntu-latest
             compiler: gcc
-            simd: with-simd
-            cmake_flags: ""
+            simd: patch-only
+            cmake_flags: "-DFSDIFF_BUILD_PATCH_ONLY=ON -DCMAKE_EXE_LINKER_FLAGS=-static"
             cc: gcc
             cxx: g++
+            artifact_name: fsdiff-linux-x64-patch-only
+
+          # ARM with SIMD
+          - os: arm
+            runner: ubuntu-24.04-arm
+            compiler: gcc
+            simd: with-simd
+            cmake_flags: "-DCMAKE_EXE_LINKER_FLAGS=-static"
+            cc: gcc
+            cxx: g++
+            artifact_name: fsdiff-linux-arm64
 
           # ARM without SIMD
           - os: arm
-            runner: ARM_Runner
+            runner: ubuntu-24.04-arm
             compiler: gcc
             simd: no-simd
             cmake_flags: "-DFSDIFF_ENABLE_SIMD=OFF"
+            cc: gcc
+            cxx: g++
+
+          # ARM patch-only with SIMD
+          - os: arm
+            runner: ubuntu-24.04-arm
+            compiler: gcc
+            simd: patch-only
+            cmake_flags: "-DFSDIFF_BUILD_PATCH_ONLY=ON -DCMAKE_EXE_LINKER_FLAGS=-static"
+            cc: gcc
+            cxx: g++
+            artifact_name: fsdiff-linux-arm64-patch-only
+
+          # ARM patch-only without SIMD
+          - os: arm
+            runner: ubuntu-24.04-arm
+            compiler: gcc
+            simd: patch-only-no-simd
+            cmake_flags: "-DFSDIFF_BUILD_PATCH_ONLY=ON -DFSDIFF_ENABLE_SIMD=OFF"
             cc: gcc
             cxx: g++
 
@@ -188,3 +219,10 @@ jobs:
             ./bin/fsdiff --version
           fi
           echo "All tests completed successfully"
+
+      - name: Upload artifact
+        if: matrix.artifact_name
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: build/bin/fsdiff
