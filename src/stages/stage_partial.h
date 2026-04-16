@@ -72,18 +72,6 @@ fsd_error_t fsd_partial_stage_run(fsd_partial_stage_t *stage,
                                   fsd_memory_pool_t *delta_pool);
 
 /**
- * Set FFT correlation threshold in standard deviations.
- *
- * Controls how selective the FFT candidate selection is.
- * Higher values = fewer candidates = faster but may miss matches.
- * Default: 5.0 (5 sigma above mean correlation)
- *
- * @param stage   Stage handle
- * @param sigma   Number of standard deviations (typically 4.0-6.0)
- */
-void fsd_partial_stage_set_fft_sigma(fsd_partial_stage_t *stage, float sigma);
-
-/**
  * Enable verbose output for debugging.
  *
  * When enabled, prints:

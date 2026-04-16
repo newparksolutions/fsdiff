@@ -44,26 +44,6 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
                            const char *output_path);
 
 /**
- * Generate a diff between memory buffers.
- *
- * @param ctx          Diff context
- * @param src          Reference (old) data
- * @param src_size     Size of reference data in bytes
- * @param dest         Destination (new) data
- * @param dest_size    Size of destination data in bytes
- * @param output       Output buffer for patch (caller-allocated)
- * @param output_size  In: buffer capacity; Out: bytes written
- * @return             FSD_SUCCESS or error code
- */
-fsd_error_t fsd_diff_memory(fsd_diff_ctx_t *ctx,
-                            const void *src,
-                            size_t src_size,
-                            const void *dest,
-                            size_t dest_size,
-                            void *output,
-                            size_t *output_size);
-
-/**
  * Set progress callback for diff operations.
  *
  * @param ctx        Diff context

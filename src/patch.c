@@ -20,7 +20,6 @@ struct fsd_patch_ctx {
     fsd_patch_options_t opts;
     fsd_progress_fn progress_cb;
     void *progress_user_data;
-    FSD_ATOMIC int cancelled;
 };
 
 void fsd_patch_options_init(fsd_patch_options_t *opts) {
@@ -49,7 +48,6 @@ fsd_error_t fsd_patch_create(fsd_patch_ctx_t **ctx_out,
 
     ctx->progress_cb = NULL;
     ctx->progress_user_data = NULL;
-    ctx->cancelled = 0;
 
     *ctx_out = ctx;
     return FSD_SUCCESS;
@@ -492,24 +490,6 @@ error:
     return err;
 }
 
-fsd_error_t fsd_patch_apply_memory(fsd_patch_ctx_t *ctx,
-                                   const void *src,
-                                   size_t src_size,
-                                   const void *patch,
-                                   size_t patch_size,
-                                   void *output,
-                                   size_t *output_size) {
-    /* TODO: Implement memory-based patch */
-    (void)ctx;
-    (void)src;
-    (void)src_size;
-    (void)patch;
-    (void)patch_size;
-    (void)output;
-    (void)output_size;
-    return FSD_ERR_INVALID_ARG;
-}
-
 fsd_error_t fsd_patch_read_header(const char *patch_path,
                                   fsd_header_t *header_out) {
     if (!patch_path || !header_out) {
@@ -551,12 +531,6 @@ void fsd_patch_set_progress(fsd_patch_ctx_t *ctx,
     if (!ctx) return;
     ctx->progress_cb = callback;
     ctx->progress_user_data = user_data;
-}
-
-void fsd_patch_cancel(fsd_patch_ctx_t *ctx) {
-    if (ctx) {
-        fsd_atomic_store(ctx->cancelled, 1);
-    }
 }
 
 void fsd_patch_destroy(fsd_patch_ctx_t *ctx) {

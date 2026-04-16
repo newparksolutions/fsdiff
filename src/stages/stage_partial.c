@@ -290,12 +290,6 @@ fsd_error_t fsd_partial_stage_run(fsd_partial_stage_t *stage,
     return FSD_SUCCESS;
 }
 
-void fsd_partial_stage_set_fft_sigma(fsd_partial_stage_t *stage, float sigma) {
-    /* Not used in local search approach */
-    (void)stage;
-    (void)sigma;
-}
-
 void fsd_partial_stage_set_verbose(fsd_partial_stage_t *stage, int verbose) {
     if (stage) {
         stage->verbose = verbose;

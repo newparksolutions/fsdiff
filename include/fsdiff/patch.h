@@ -44,26 +44,6 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
                             const char *output_path);
 
 /**
- * Apply a patch using memory buffers.
- *
- * @param ctx          Patch context
- * @param src          Reference (old) data
- * @param src_size     Size of reference data in bytes
- * @param patch        Patch data
- * @param patch_size   Size of patch data in bytes
- * @param output       Output buffer (caller-allocated)
- * @param output_size  In: buffer capacity; Out: bytes written
- * @return             FSD_SUCCESS or error code
- */
-fsd_error_t fsd_patch_apply_memory(fsd_patch_ctx_t *ctx,
-                                   const void *src,
-                                   size_t src_size,
-                                   const void *patch,
-                                   size_t patch_size,
-                                   void *output,
-                                   size_t *output_size);
-
-/**
  * Read and validate a patch header without applying.
  *
  * @param patch_path  Path to patch file
@@ -93,15 +73,6 @@ fsd_error_t fsd_patch_output_size(const char *patch_path,
 void fsd_patch_set_progress(fsd_patch_ctx_t *ctx,
                             fsd_progress_fn callback,
                             void *user_data);
-
-/**
- * Cancel an in-progress patch operation.
- *
- * Thread-safe; can be called from another thread or signal handler.
- *
- * @param ctx  Patch context
- */
-void fsd_patch_cancel(fsd_patch_ctx_t *ctx);
 
 /**
  * Destroy a patch context and release resources.

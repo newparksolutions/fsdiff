@@ -286,24 +286,6 @@ cleanup:
     return err;
 }
 
-fsd_error_t fsd_diff_memory(fsd_diff_ctx_t *ctx,
-                            const void *src,
-                            size_t src_size,
-                            const void *dest,
-                            size_t dest_size,
-                            void *output,
-                            size_t *output_size) {
-    /* TODO: Implement memory-based diff */
-    (void)ctx;
-    (void)src;
-    (void)src_size;
-    (void)dest;
-    (void)dest_size;
-    (void)output;
-    (void)output_size;
-    return FSD_ERR_INVALID_ARG;
-}
-
 void fsd_diff_set_progress(fsd_diff_ctx_t *ctx,
                            fsd_progress_fn callback,
                            void *user_data) {

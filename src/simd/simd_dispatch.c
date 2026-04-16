@@ -94,11 +94,6 @@ static fsd_simd_caps_t detect_arm_caps(void) {
 }
 #endif
 
-#else
-/* Unknown architecture */
-static fsd_simd_caps_t detect_caps(void) {
-    return FSD_SIMD_NONE;
-}
 #endif
 
 static void setup_scalar_dispatch(void) {
