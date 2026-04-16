@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
 static void print_usage(const char *prog) {
     fprintf(stderr, "fsdiff - Binary block-level diff/patch tool\n\n");
@@ -193,7 +194,7 @@ static int cmd_create(int argc, char **argv) {
         fprintf(stderr, "  Literal blocks:    %lu (%.1f%%)\n",
                 (unsigned long)stats.literal_blocks,
                 100.0 * stats.literal_blocks / tb);
-        fprintf(stderr, "  Patch size:        %lu bytes\n", (unsigned long)stats.patch_size);
+        fprintf(stderr, "  Patch size:        %" PRIu64 " bytes\n", stats.patch_size);
         fprintf(stderr, "  Time:              %.2f seconds\n", stats.elapsed_seconds);
     }
 

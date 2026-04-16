@@ -61,7 +61,7 @@ fsd_error_t fsd_patch_read_header(const char *patch_path,
  * @return            FSD_SUCCESS or error code
  */
 fsd_error_t fsd_patch_output_size(const char *patch_path,
-                                  size_t *size_out);
+                                  uint64_t *size_out);
 
 /**
  * Set progress callback for patch operations.

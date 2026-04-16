@@ -150,7 +150,7 @@ typedef struct {
     uint64_t zero_blocks;        /**< Blocks that are all zeros */
     uint64_t one_blocks;         /**< Blocks that are all 0xFF */
     uint64_t literal_blocks;     /**< Blocks stored as literals */
-    size_t   patch_size;         /**< Size of generated patch in bytes */
+    uint64_t patch_size;         /**< Size of generated patch in bytes */
     double   elapsed_seconds;    /**< Time taken for diff operation */
 } fsd_diff_stats_t;
 

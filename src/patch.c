@@ -507,7 +507,7 @@ fsd_error_t fsd_patch_read_header(const char *patch_path,
 }
 
 fsd_error_t fsd_patch_output_size(const char *patch_path,
-                                  size_t *size_out) {
+                                  uint64_t *size_out) {
     if (!patch_path || !size_out) {
         return FSD_ERR_INVALID_ARG;
     }
@@ -518,9 +518,6 @@ fsd_error_t fsd_patch_output_size(const char *patch_path,
         return err;
     }
 
-    /* NOTE: This multiplication can overflow size_t on 32-bit platforms
-     * for large images. Fixing properly requires an API change (e.g. uint64_t
-     * output parameter). Callers on 32-bit should check for overflow. */
     *size_out = header.dest_blocks * (1ULL << header.block_size_log2);
     return FSD_SUCCESS;
 }
