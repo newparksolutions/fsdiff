@@ -549,7 +549,6 @@ const char *fsd_strerror(fsd_error_t err) {
     case FSD_ERR_BAD_VERSION:     return "Unsupported version";
     case FSD_ERR_BAD_BLOCK_SIZE:  return "Invalid block size";
     case FSD_ERR_SIZE_MISMATCH:   return "Size mismatch";
-    case FSD_ERR_FFTW:            return "FFTW error";
     case FSD_ERR_NOT_INITIALIZED: return "Not initialized";
     case FSD_ERR_CANCELLED:       return "Operation cancelled";
     case FSD_ERR_FILE_NOT_FOUND:  return "File not found";

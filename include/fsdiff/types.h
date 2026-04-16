@@ -74,7 +74,7 @@ typedef enum {
     FSD_MATCH_NONE       = 0,  /**< No match found */
     FSD_MATCH_IDENTITY   = 1,  /**< Same position, identical content */
     FSD_MATCH_RELOCATE   = 2,  /**< Different position, identical content */
-    FSD_MATCH_PARTIAL    = 3,  /**< Approximate match via FFT correlation */
+    FSD_MATCH_PARTIAL    = 3,  /**< Approximate match via local search */
     FSD_MATCH_ZERO       = 4,  /**< Block is all zeros */
     FSD_MATCH_ONE        = 5,  /**< Block is all 0xFF */
 } fsd_match_type_t;
@@ -146,7 +146,7 @@ typedef struct {
     uint64_t total_blocks;       /**< Total destination blocks */
     uint64_t identity_matches;   /**< Blocks matched by identity (Stage 1) */
     uint64_t relocate_matches;   /**< Blocks matched by relocation (Stage 2) */
-    uint64_t partial_matches;    /**< Blocks matched by FFT (Stage 3) */
+    uint64_t partial_matches;    /**< Blocks matched by local search (Stage 3) */
     uint64_t zero_blocks;        /**< Blocks that are all zeros */
     uint64_t one_blocks;         /**< Blocks that are all 0xFF */
     uint64_t literal_blocks;     /**< Blocks stored as literals */

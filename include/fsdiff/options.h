@@ -31,20 +31,14 @@ typedef struct {
     /** Enable Stage 2: Relocation matching via CRC32 (default: true) */
     bool enable_relocation;
 
-    /** Enable Stage 3: FFT partial matching (default: true) */
+    /** Enable Stage 3: Local search partial matching (default: true) */
     bool enable_partial;
 
-    /** Correlation threshold for partial match (0.0-1.0, default: 0.5) */
+    /** Match threshold for partial matching (0.0-1.0, default: 0.5) */
     float partial_threshold;
 
     /** Search radius in blocks for partial matching (default: 8) */
     int search_radius;
-
-    /** Number of random projections for FFT (1-4, default: 1) */
-    int num_projections;
-
-    /** Use frequency weighting for FFT (default: false) */
-    bool use_freq_weighting;
 
     /** Maximum memory usage in MB (0 = unlimited, default: 0) */
     size_t max_memory_mb;

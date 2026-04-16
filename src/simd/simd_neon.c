@@ -4,7 +4,7 @@
  */
 
 /**
- * @file projection_neon.c
+ * @file simd_neon.c
  * @brief ARM NEON optimized implementations
  */
 

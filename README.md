@@ -275,9 +275,9 @@ fsdiff/
 │   │
 │   ├── simd/              # SIMD implementations
 │   │   ├── simd_dispatch.c     # Runtime CPU detection
-│   │   ├── projection_scalar.c # Scalar fallback
-│   │   ├── projection_avx2.c   # AVX2 (x86-64)
-│   │   └── projection_neon.c   # NEON (ARM)
+│   │   ├── simd_scalar.c        # Scalar fallback
+│   │   ├── simd_avx2.c          # AVX2 (x86-64)
+│   │   └── simd_neon.c          # NEON (ARM)
 │   │
 │   ├── io/                # File I/O
 │   │   ├── mmap_reader.c      # Memory-mapped input (cross-platform)

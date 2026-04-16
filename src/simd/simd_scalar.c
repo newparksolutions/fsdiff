@@ -4,7 +4,7 @@
  */
 
 /**
- * @file projection_scalar.c
+ * @file simd_scalar.c
  * @brief Scalar fallback implementations for SIMD operations
  */
 

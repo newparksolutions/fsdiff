@@ -28,7 +28,6 @@ typedef enum {
     FSD_ERR_BAD_VERSION     = -6,   /**< Unsupported patch format version */
     FSD_ERR_BAD_BLOCK_SIZE  = -7,   /**< Invalid or unsupported block size */
     FSD_ERR_SIZE_MISMATCH   = -8,   /**< File size doesn't match expected */
-    FSD_ERR_FFTW            = -9,   /**< FFTW library error */
     FSD_ERR_NOT_INITIALIZED = -10,  /**< Library not initialized */
     FSD_ERR_CANCELLED       = -11,  /**< Operation was cancelled */
     FSD_ERR_FILE_NOT_FOUND  = -12,  /**< File not found */

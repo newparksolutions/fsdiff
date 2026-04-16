@@ -12,7 +12,7 @@
  *
  *   Stage 1: Identity matching (same position, identical content)
  *   Stage 2: Relocation matching (different position, identical content)
- *   Stage 3: FFT-based partial matching (approximate matches)
+ *   Stage 3: Local search partial matching (approximate matches)
  *
  * The output format (BKDF) is designed for efficient storage and
  * external compression.

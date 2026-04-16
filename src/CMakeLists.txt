@@ -17,7 +17,7 @@ set(FSDIFF_CORE_SOURCES
     encoding/bkdf_header.c
     encoding/operation_encoder.c
     simd/simd_dispatch.c
-    simd/projection_scalar.c
+    simd/simd_scalar.c
     diff.c
     patch.c
 )
@@ -47,7 +47,7 @@ set_property(TARGET fsdiff_objects PROPERTY POSITION_INDEPENDENT_CODE ON)
 # AVX2 implementation
 if(FSDIFF_HAS_AVX2)
     add_library(fsdiff_avx2 OBJECT
-        simd/projection_avx2.c
+        simd/simd_avx2.c
     )
 
     target_include_directories(fsdiff_avx2
@@ -68,7 +68,7 @@ endif()
 # NEON implementation
 if(FSDIFF_HAS_NEON)
     add_library(fsdiff_neon OBJECT
-        simd/projection_neon.c
+        simd/simd_neon.c
     )
 
     target_include_directories(fsdiff_neon

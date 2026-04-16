@@ -5,7 +5,7 @@
 
 /**
  * @file stage_partial.h
- * @brief Stage 3: FFT-based partial matching for approximate block matches
+ * @brief Stage 3: Local search partial matching for approximate block matches
  */
 
 #ifndef FSDIFF_STAGE_PARTIAL_H
@@ -24,11 +24,11 @@ extern "C" {
 typedef struct fsd_partial_stage fsd_partial_stage_t;
 
 /**
- * Create FFT-based partial matching stage.
+ * Create partial matching stage.
  *
  * @param stage_out   Output pointer for stage
  * @param block_size  Block size in bytes
- * @param threshold   Correlation threshold (0.0-1.0)
+ * @param threshold   Match threshold (0.0-1.0, fraction of bytes that must match)
  * @return            FSD_SUCCESS or error code
  */
 fsd_error_t fsd_partial_stage_create(fsd_partial_stage_t **stage_out,
@@ -36,9 +36,9 @@ fsd_error_t fsd_partial_stage_create(fsd_partial_stage_t **stage_out,
                                      float threshold);
 
 /**
- * Build FFT index from source blocks.
+ * Build index from source blocks.
  *
- * Precomputes projections onto coprime subspaces and FFTs.
+ * Records source size for subsequent local search.
  *
  * @param stage       Stage handle
  * @param src         Source image data
@@ -52,11 +52,10 @@ fsd_error_t fsd_partial_stage_build_index(fsd_partial_stage_t *stage,
 /**
  * Run partial matching on unmatched blocks.
  *
- * Uses FFT-based correlation to find approximate matches:
- * 1. Project onto coprime moduli subspaces (8192, 6561, 3125)
- * 2. Compute cyclic correlation via FFT
- * 3. Reconstruct positions via Chinese Remainder Theorem
- * 4. Verify candidates with direct byte comparison
+ * For each unmatched block, searches nearby byte offsets for the best
+ * approximate match. If no match is found relative to the current
+ * position, searches relative to the previous block's relocation.
+ * Extends matches to consecutive unmatched blocks where possible.
  *
  * @param stage       Stage handle
  * @param tracker     Block tracker with results from earlier stages
@@ -73,11 +72,6 @@ fsd_error_t fsd_partial_stage_run(fsd_partial_stage_t *stage,
 
 /**
  * Enable verbose output for debugging.
- *
- * When enabled, prints:
- * - Progress during projection computation
- * - Progress during block matching
- * - Candidate counts from CRT reconstruction
  *
  * @param stage    Stage handle
  * @param verbose  1 to enable, 0 to disable

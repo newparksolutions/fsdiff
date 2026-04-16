@@ -6,6 +6,5 @@ includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 Name: fsdiff
 Description: @PROJECT_DESCRIPTION@
 Version: @PROJECT_VERSION@
-Requires: fftw3f
 Libs: -L${libdir} -lfsdiff
 Cflags: -I${includedir}

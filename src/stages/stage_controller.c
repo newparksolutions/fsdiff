@@ -161,13 +161,13 @@ fsd_error_t fsd_stage_controller_run(fsd_stage_controller_t *ctrl,
     }
 
     /*
-     * Stage 3: Partial matching (FFT-based)
+     * Stage 3: Partial matching (local search)
      * Find approximate matches for remaining unmatched blocks
      */
     if (ctrl->enable_partial && ctrl->partial) {
         if (fsd_atomic_load(ctrl->cancelled)) return FSD_ERR_CANCELLED;
 
-        /* Build FFT index */
+        /* Build source index */
         err = fsd_partial_stage_build_index(ctrl->partial,
                                             src_data,
                                             src_blocks);

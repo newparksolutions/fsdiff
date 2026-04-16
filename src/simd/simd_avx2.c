@@ -4,7 +4,7 @@
  */
 
 /**
- * @file projection_avx2.c
+ * @file simd_avx2.c
  * @brief AVX2 optimized implementations for x86-64
  */
 

@@ -42,8 +42,6 @@ void fsd_diff_options_init(fsd_diff_options_t *opts) {
     opts->enable_partial = true;
     opts->partial_threshold = 0.5f;
     opts->search_radius = 8;
-    opts->num_projections = 1;
-    opts->use_freq_weighting = false;
     opts->max_memory_mb = 0;
     opts->force_scalar = false;
     opts->allocator = NULL;

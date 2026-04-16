@@ -33,12 +33,11 @@ static void print_usage(const char *prog) {
     fprintf(stderr, "\n");
     fprintf(stderr, "Delta options:\n");
     fprintf(stderr, "  -b, --block-size <log2>   Block size as power of 2 (default: 12 = 4096)\n");
-    fprintf(stderr, "  -r, --search-radius <n>   Search radius for relocation (default: 8)\n");
-    fprintf(stderr, "  -p, --projections <n>     Number of FFT projections (default: 1)\n");
+    fprintf(stderr, "  -r, --search-radius <n>   Search radius for partial matching (default: 8)\n");
     fprintf(stderr, "  -t, --threshold <f>       Partial match threshold 0.0-1.0 (default: 0.5)\n");
     fprintf(stderr, "  --no-identity             Disable identity matching\n");
     fprintf(stderr, "  --no-relocation           Disable relocation matching\n");
-    fprintf(stderr, "  --no-partial              Disable partial (FFT) matching\n");
+    fprintf(stderr, "  --no-partial              Disable partial matching\n");
     fprintf(stderr, "  --scalar                  Force scalar (non-SIMD) code path\n");
     fprintf(stderr, "  -v, --verbose             Show progress and statistics\n");
     fprintf(stderr, "  -V, --very-verbose        Detailed output from all matching stages\n");
@@ -69,7 +68,6 @@ static int cmd_create(int argc, char **argv) {
     static struct option long_options[] = {
         {"block-size",      required_argument, 0, 'b'},
         {"search-radius",   required_argument, 0, 'r'},
-        {"projections",     required_argument, 0, 'p'},
         {"threshold",       required_argument, 0, 't'},
         {"no-identity",     no_argument,       0, 'I'},
         {"no-relocation",   no_argument,       0, 'R'},
@@ -86,7 +84,7 @@ static int cmd_create(int argc, char **argv) {
     int verbose = 0;
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "b:r:p:t:vVh", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "b:r:t:vVh", long_options, NULL)) != -1) {
         switch (opt) {
         case 'b':
             opts.block_size_log2 = atoi(optarg);
@@ -97,9 +95,6 @@ static int cmd_create(int argc, char **argv) {
             break;
         case 'r':
             opts.search_radius = atoi(optarg);
-            break;
-        case 'p':
-            opts.num_projections = atoi(optarg);
             break;
         case 't':
             opts.partial_threshold = (float)atof(optarg);
