@@ -25,19 +25,17 @@ macro(fsdiff_add_test name)
     add_test(NAME ${name} COMMAND ${name})
 endmacro()
 
-# Core module tests
-fsdiff_add_test(test_crc32)
-fsdiff_add_test(test_memory_pool)
-fsdiff_add_test(test_block_tracker)
+# Tests available in all build modes (patch-only and full)
 fsdiff_add_test(test_simd)
-
-# I/O tests
 fsdiff_add_test(test_mmap_reader)
-fsdiff_add_test(test_buffered_writer)
-
-# Encoding tests
 fsdiff_add_test(test_bkdf_header)
 fsdiff_add_test(test_decoder)
 
-# Integration tests
-fsdiff_add_test(test_roundtrip)
+# Tests that require diff (full build only)
+if(NOT FSDIFF_BUILD_PATCH_ONLY)
+    fsdiff_add_test(test_crc32)
+    fsdiff_add_test(test_memory_pool)
+    fsdiff_add_test(test_block_tracker)
+    fsdiff_add_test(test_buffered_writer)
+    fsdiff_add_test(test_roundtrip)
+endif()

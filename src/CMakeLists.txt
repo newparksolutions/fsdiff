@@ -2,25 +2,36 @@
 # fsdiff library source configuration
 ###############################################################################
 
-# Core sources (always compiled)
-set(FSDIFF_CORE_SOURCES
+# Patch-only sources (minimal set for applying patches)
+set(FSDIFF_PATCH_SOURCES
+    io/mmap_reader.c
+    encoding/bkdf_header.c
+    simd/simd_dispatch.c
+    simd/simd_scalar.c
+    patch.c
+)
+
+# Additional sources needed for diff creation
+set(FSDIFF_DIFF_SOURCES
     core/memory_pool.c
     core/crc32.c
     core/hash_table.c
     core/block_tracker.c
-    io/mmap_reader.c
     io/buffered_writer.c
     stages/stage_identity.c
     stages/stage_relocation.c
     stages/stage_partial.c
     stages/stage_controller.c
-    encoding/bkdf_header.c
     encoding/operation_encoder.c
-    simd/simd_dispatch.c
-    simd/simd_scalar.c
     diff.c
-    patch.c
 )
+
+# Select sources based on build mode
+if(FSDIFF_BUILD_PATCH_ONLY)
+    set(FSDIFF_CORE_SOURCES ${FSDIFF_PATCH_SOURCES})
+else()
+    set(FSDIFF_CORE_SOURCES ${FSDIFF_PATCH_SOURCES} ${FSDIFF_DIFF_SOURCES})
+endif()
 
 # Object library for shared code
 add_library(fsdiff_objects OBJECT ${FSDIFF_CORE_SOURCES})
@@ -37,6 +48,10 @@ target_link_libraries(fsdiff_objects
     PRIVATE
         fsdiff_compiler_flags
 )
+
+if(FSDIFF_BUILD_PATCH_ONLY)
+    target_compile_definitions(fsdiff_objects PRIVATE FSDIFF_PATCH_ONLY=1)
+endif()
 
 set_property(TARGET fsdiff_objects PROPERTY POSITION_INDEPENDENT_CODE ON)
 

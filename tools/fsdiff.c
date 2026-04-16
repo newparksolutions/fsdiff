@@ -22,15 +22,20 @@
 static void print_usage(const char *prog) {
     fprintf(stderr, "fsdiff - Binary block-level diff/patch tool\n\n");
     fprintf(stderr, "Usage:\n");
+#ifndef FSDIFF_PATCH_ONLY
     fprintf(stderr, "  %s delta [options] <source> <destination> <patch>\n", prog);
+#endif
     fprintf(stderr, "  %s patch [options] <source> <patch> <output>\n", prog);
     fprintf(stderr, "  %s info <patch>\n", prog);
     fprintf(stderr, "\n");
     fprintf(stderr, "Commands:\n");
+#ifndef FSDIFF_PATCH_ONLY
     fprintf(stderr, "  delta    Generate a patch file from source to destination\n");
+#endif
     fprintf(stderr, "  patch     Apply a patch file to source, creating output\n");
     fprintf(stderr, "  info      Display information about a patch file\n");
     fprintf(stderr, "\n");
+#ifndef FSDIFF_PATCH_ONLY
     fprintf(stderr, "Delta options:\n");
     fprintf(stderr, "  -b, --block-size <log2>   Block size as power of 2 (default: 12 = 4096)\n");
     fprintf(stderr, "  -r, --search-radius <n>   Search radius for partial matching (default: 8)\n");
@@ -42,12 +47,15 @@ static void print_usage(const char *prog) {
     fprintf(stderr, "  -v, --verbose             Show progress and statistics\n");
     fprintf(stderr, "  -V, --very-verbose        Detailed output from all matching stages\n");
     fprintf(stderr, "\n");
+#endif
     fprintf(stderr, "Patch options:\n");
     fprintf(stderr, "  --verify                  Verify output checksum if available\n");
     fprintf(stderr, "  -v, --verbose             Show progress\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Examples:\n");
+#ifndef FSDIFF_PATCH_ONLY
     fprintf(stderr, "  %s delta fs_v1.img fs_v2.img update.patch\n", prog);
+#endif
     fprintf(stderr, "  %s patch fs_v1.img update.patch fs_v2_rebuilt.img\n", prog);
     fprintf(stderr, "  %s info update.patch\n", prog);
 }
@@ -64,6 +72,7 @@ static void progress_callback(void *user_data, uint64_t current, uint64_t total)
     }
 }
 
+#ifndef FSDIFF_PATCH_ONLY
 static int cmd_create(int argc, char **argv) {
     static struct option long_options[] = {
         {"block-size",      required_argument, 0, 'b'},
@@ -191,6 +200,7 @@ static int cmd_create(int argc, char **argv) {
     fsd_diff_destroy(ctx);
     return 0;
 }
+#endif /* !FSDIFF_PATCH_ONLY */
 
 static int cmd_apply(int argc, char **argv) {
     static struct option long_options[] = {
@@ -311,9 +321,12 @@ int main(int argc, char **argv) {
     const char *cmd = argv[1];
     int result;
 
+#ifndef FSDIFF_PATCH_ONLY
     if (strcmp(cmd, "delta") == 0) {
         result = cmd_create(argc - 1, argv + 1);
-    } else if (strcmp(cmd, "patch") == 0) {
+    } else
+#endif
+    if (strcmp(cmd, "patch") == 0) {
         result = cmd_apply(argc - 1, argv + 1);
     } else if (strcmp(cmd, "info") == 0) {
         result = cmd_info(argc - 2, argv + 2);
