@@ -156,9 +156,14 @@ target_compile_options(fsdiff_compiler_flags INTERFACE
     $<$<CONFIG:RelWithDebInfo>:${FSDIFF_C_FLAGS_RELEASE}>
 )
 
-# Platform-specific linker flags
+# Platform-specific linker flags.
+# For Release / MinSizeRel: strip local symbols at link time (-Wl,-s) so
+# distributed binaries don't ship with debug names. RelWithDebInfo is
+# explicitly excluded — that build type exists to keep debug info.
+# MSVC writes debug info to a separate .pdb, so the .exe is already lean.
 if(NOT WIN32)
     target_link_options(fsdiff_compiler_flags INTERFACE
-        $<$<CONFIG:Release>:-Wl,--gc-sections>
+        $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-Wl,--gc-sections>
+        $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-Wl,-s>
     )
 endif()

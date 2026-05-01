@@ -175,6 +175,8 @@ if(FSDIFF_BUILD_SHARED)
     target_link_libraries(fsdiff_shared
         PUBLIC
             ${MATH_LIBRARY}
+        PRIVATE
+            fsdiff_compiler_flags
     )
 
     install(TARGETS fsdiff_shared

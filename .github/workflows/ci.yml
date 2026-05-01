@@ -15,12 +15,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Ubuntu x64 GCC with SIMD
+          # Ubuntu x64 GCC with SIMD (dynamic libc — avoids LGPL static-link obligations)
           - os: ubuntu-x64
             runner: ubuntu-latest
             compiler: gcc
             simd: with-simd
-            cmake_flags: "-DCMAKE_EXE_LINKER_FLAGS=-static"
+            cmake_flags: ""
             cc: gcc
             cxx: g++
             artifact_name: fsdiff-linux-x64
@@ -106,22 +106,22 @@ jobs:
             cc: clang-15
             cxx: clang++-15
 
-          # Ubuntu x64 patch-only
+          # Ubuntu x64 patch-only (dynamic libc — standard for redistributable Linux binaries)
           - os: ubuntu-x64
             runner: ubuntu-latest
             compiler: gcc
             simd: patch-only
-            cmake_flags: "-DFSDIFF_BUILD_PATCH_ONLY=ON -DCMAKE_EXE_LINKER_FLAGS=-static"
+            cmake_flags: "-DFSDIFF_BUILD_PATCH_ONLY=ON"
             cc: gcc
             cxx: g++
             artifact_name: fsdiff-linux-x64-patch-only
 
-          # ARM with SIMD
+          # ARM with SIMD (dynamic libc — avoids LGPL static-link obligations)
           - os: arm
             runner: ubuntu-24.04-arm
             compiler: gcc
             simd: with-simd
-            cmake_flags: "-DCMAKE_EXE_LINKER_FLAGS=-static"
+            cmake_flags: ""
             cc: gcc
             cxx: g++
             artifact_name: fsdiff-linux-arm64
@@ -135,12 +135,12 @@ jobs:
             cc: gcc
             cxx: g++
 
-          # ARM patch-only with SIMD
+          # ARM patch-only with SIMD (dynamic libc — standard for redistributable Linux binaries)
           - os: arm
             runner: ubuntu-24.04-arm
             compiler: gcc
             simd: patch-only
-            cmake_flags: "-DFSDIFF_BUILD_PATCH_ONLY=ON -DCMAKE_EXE_LINKER_FLAGS=-static"
+            cmake_flags: "-DFSDIFF_BUILD_PATCH_ONLY=ON"
             cc: gcc
             cxx: g++
             artifact_name: fsdiff-linux-arm64-patch-only
@@ -219,6 +219,21 @@ jobs:
             ./bin/fsdiff --version
           fi
           echo "All tests completed successfully"
+
+      - name: Verify artifact is stripped
+        if: matrix.artifact_name && runner.os != 'Windows'
+        run: |
+          info=$(file build/bin/fsdiff)
+          echo "$info"
+          case "$info" in
+            *", stripped"*)
+              echo "OK: binary is stripped"
+              ;;
+            *)
+              echo "ERROR: artifact is not stripped — release link flags not applied"
+              exit 1
+              ;;
+          esac
 
       - name: Upload artifact
         if: matrix.artifact_name
