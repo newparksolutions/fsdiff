@@ -5,6 +5,7 @@
 # Patch-only sources (minimal set for applying patches)
 set(FSDIFF_PATCH_SOURCES
     io/mmap_reader.c
+    io/source_reader.c
     encoding/bkdf_header.c
     simd/simd_dispatch.c
     simd/simd_scalar.c

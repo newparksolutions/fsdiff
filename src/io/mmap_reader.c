@@ -15,6 +15,7 @@
 
 #include "mmap_reader.h"
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 
 #ifdef _WIN32
@@ -64,6 +65,12 @@ fsd_error_t fsd_mmap_open(fsd_mmap_reader_t **reader_out, const char *path) {
 
     LARGE_INTEGER size;
     if (!GetFileSizeEx(reader->file_handle, &size)) {
+        CloseHandle(reader->file_handle);
+        free(reader);
+        return FSD_ERR_IO;
+    }
+    /* Reject files that don't fit in size_t (32-bit hosts with >4 GiB). */
+    if (size.QuadPart < 0 || (uint64_t)size.QuadPart > (uint64_t)SIZE_MAX) {
         CloseHandle(reader->file_handle);
         free(reader);
         return FSD_ERR_IO;
@@ -122,6 +129,12 @@ fsd_error_t fsd_mmap_open(fsd_mmap_reader_t **reader_out, const char *path) {
 
     struct stat st;
     if (fstat(reader->fd, &st) < 0) {
+        close(reader->fd);
+        free(reader);
+        return FSD_ERR_IO;
+    }
+    /* Reject files that don't fit in size_t (32-bit hosts with >4 GiB). */
+    if (st.st_size < 0 || (uint64_t)st.st_size > (uint64_t)SIZE_MAX) {
         close(reader->fd);
         free(reader);
         return FSD_ERR_IO;

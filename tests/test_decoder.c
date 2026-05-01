@@ -667,17 +667,19 @@ static int test_copy_add_negative(void) {
     /* Blocks 0-1: OP_COPY_IDENTITY */
     patch[pos++] = (0 << 5) | (3 << 3) | 1;  /* inline count=2 */
 
-    /* Block 2: OP_COPY_ADD from byte offset -256 (negative), dense
-     * Source position = 2*512 + (-256) = 768 bytes
-     * First byte: [op=4][count_enc=3 (inline=1)][offset_enc=0][diff_fmt=0]
-     */
-    patch[pos++] = (4 << 5) | (3 << 3) | (0 << 1) | 0;
+    /* Block 2: OP_COPY_ADD from byte offset -256 (negative), dense.
+     * Source position = 2*512 + (-256) = 768 bytes.
+     * First byte: [op=4][count_enc=0 (1-byte follows)][offset_enc=0][diff_fmt=0]
+     * Spec forbids count_enc=3 for COPY_ADD because bits[2:0] are reused
+     * for offset_enc + diff_fmt. */
+    patch[pos++] = (4 << 5) | (0 << 3) | (0 << 1) | 0;
 
     /* byte_offset = -256 (2 bytes, two's complement) */
     write_u16_le(&patch[pos], (uint16_t)(int16_t)(-256));
     pos += 2;
 
-    /* count is inline: bits[2:0] = 0, so count = 1 - already encoded in first_byte */
+    /* count: 1-byte form, stored as count-1, so 0 means count=1 */
+    patch[pos++] = 0;
 
     /* diff_len */
     write_u32_le(&patch[pos], BLOCK_SIZE);
@@ -862,10 +864,12 @@ static int test_mixed_operations(void) {
     /* Block 4: OP_LITERAL (1 block) */
     patch[pos++] = (5 << 5) | (3 << 3) | 0;  /* inline count=1 */
 
-    /* Block 5: OP_COPY_ADD (1 block, dense, offset=0) */
-    patch[pos++] = (4 << 5) | (3 << 3) | (0 << 1) | 0;  /* inline count=1, 2-byte offset, dense */
+    /* Block 5: OP_COPY_ADD (1 block, dense, offset=0).
+     * count_enc=0 (1-byte follows; spec forbids count_enc=3 for COPY_ADD). */
+    patch[pos++] = (4 << 5) | (0 << 3) | (0 << 1) | 0;
     write_u16_le(&patch[pos], 0);  /* byte_offset = 0 */
     pos += 2;
+    patch[pos++] = 0;  /* count - 1 = 0, so count = 1 */
     write_u32_le(&patch[pos], BLOCK_SIZE);  /* diff_len */
     pos += 4;
 

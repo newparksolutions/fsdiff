@@ -19,7 +19,9 @@
 #include "encoding/bkdf_header.h"
 #include "encoding/operation_encoder.h"
 #include "io/mmap_reader.h"
+#include "io/source_reader.h"
 #include "io/buffered_writer.h"
+#include "simd/simd_dispatch.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -44,6 +46,7 @@ void fsd_diff_options_init(fsd_diff_options_t *opts) {
     opts->search_radius = 8;
     opts->max_memory_mb = 0;
     opts->force_scalar = false;
+    opts->source_mode = FSD_SOURCE_AUTO;
     opts->allocator = NULL;
 }
 
@@ -91,21 +94,41 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
     clock_t start_time = clock();
     fsd_error_t err;
 
-    /* Memory-map source and destination */
-    fsd_mmap_reader_t *src_reader = NULL;
+    /* Honor the force-scalar option. The SIMD dispatch table is process-
+     * global (set up by fsd_init), so this affects subsequent operations
+     * too — callers that want SIMD back must call fsd_init() again. */
+    if (ctx->opts.force_scalar) {
+        fsd_simd_force_scalar();
+    }
+
+    /* Open source via the source_reader abstraction. Auto-detect routes
+     * block-device sources through O_DIRECT to bypass the bdev page cache
+     * (which would otherwise be polluted by a mounted FS driver's dirty
+     * metadata buffers). The destination is a normal file in the typical
+     * build-host workflow, so it stays on mmap. */
+    fsd_source_reader_t *src_reader = NULL;
     fsd_mmap_reader_t *dest_reader = NULL;
 
-    err = fsd_mmap_open(&src_reader, src_path);
+    err = fsd_source_reader_open(&src_reader, src_path, ctx->opts.source_mode);
     if (err != FSD_SUCCESS) return err;
 
     err = fsd_mmap_open(&dest_reader, dest_path);
     if (err != FSD_SUCCESS) {
-        fsd_mmap_close(src_reader);
+        fsd_source_reader_close(src_reader);
         return err;
     }
 
-    const uint8_t *src_data = fsd_mmap_data(src_reader);
-    size_t src_size = fsd_mmap_size(src_reader);
+    /* The matching stages need a contiguous base pointer for random access.
+     * On the direct backend this slurps the source into an aligned buffer
+     * (cost = source size); on mmap this is a zero-cost pointer return. */
+    const uint8_t *src_data = NULL;
+    err = fsd_source_reader_data(src_reader, (const void **)&src_data);
+    if (err != FSD_SUCCESS) {
+        fsd_mmap_close(dest_reader);
+        fsd_source_reader_close(src_reader);
+        return err;
+    }
+    size_t src_size = fsd_source_reader_size(src_reader);
     const uint8_t *dest_data = fsd_mmap_data(dest_reader);
     size_t dest_size = fsd_mmap_size(dest_reader);
 
@@ -118,7 +141,7 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
     err = fsd_stage_controller_create(&controller, &ctx->opts, src_blocks, dest_blocks);
     if (err != FSD_SUCCESS) {
         fsd_mmap_close(dest_reader);
-        fsd_mmap_close(src_reader);
+        fsd_source_reader_close(src_reader);
         return err;
     }
 
@@ -137,7 +160,7 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
     if (err != FSD_SUCCESS) {
         fsd_stage_controller_destroy(controller);
         fsd_mmap_close(dest_reader);
-        fsd_mmap_close(src_reader);
+        fsd_source_reader_close(src_reader);
         return err;
     }
 
@@ -159,7 +182,7 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
         if (lit_fd >= 0) { fsd_close(lit_fd); fsd_unlink(lit_tmp); }
         fsd_stage_controller_destroy(controller);
         fsd_mmap_close(dest_reader);
-        fsd_mmap_close(src_reader);
+        fsd_source_reader_close(src_reader);
         return FSD_ERR_IO;
     }
 
@@ -176,7 +199,7 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
         fsd_unlink(lit_tmp);
         fsd_stage_controller_destroy(controller);
         fsd_mmap_close(dest_reader);
-        fsd_mmap_close(src_reader);
+        fsd_source_reader_close(src_reader);
         return FSD_ERR_IO;
     }
 
@@ -279,7 +302,7 @@ cleanup:
     fsd_unlink(lit_tmp);
     fsd_stage_controller_destroy(controller);
     fsd_mmap_close(dest_reader);
-    fsd_mmap_close(src_reader);
+    fsd_source_reader_close(src_reader);
 
     return err;
 }

@@ -28,6 +28,7 @@ endmacro()
 # Tests available in all build modes (patch-only and full)
 fsdiff_add_test(test_simd)
 fsdiff_add_test(test_mmap_reader)
+fsdiff_add_test(test_source_reader)
 fsdiff_add_test(test_bkdf_header)
 fsdiff_add_test(test_decoder)
 

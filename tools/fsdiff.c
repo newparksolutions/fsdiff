@@ -20,6 +20,13 @@
 #include <string.h>
 #include <inttypes.h>
 
+static int parse_source_mode(const char *s, fsd_source_mode_t *out) {
+    if (strcmp(s, "auto") == 0)   { *out = FSD_SOURCE_AUTO;   return 0; }
+    if (strcmp(s, "mmap") == 0)   { *out = FSD_SOURCE_MMAP;   return 0; }
+    if (strcmp(s, "direct") == 0) { *out = FSD_SOURCE_DIRECT; return 0; }
+    return -1;
+}
+
 static void print_usage(const char *prog) {
     fprintf(stderr, "fsdiff - Binary block-level diff/patch tool\n\n");
     fprintf(stderr, "Usage:\n");
@@ -47,11 +54,18 @@ static void print_usage(const char *prog) {
     fprintf(stderr, "  --scalar                  Force scalar (non-SIMD) code path\n");
     fprintf(stderr, "  -v, --verbose             Show progress and statistics\n");
     fprintf(stderr, "  -V, --very-verbose        Detailed output from all matching stages\n");
+    fprintf(stderr, "  --source-mode <m>         Source backend: auto|mmap|direct (default: auto)\n");
     fprintf(stderr, "\n");
 #endif
     fprintf(stderr, "Patch options:\n");
     fprintf(stderr, "  --verify                  Verify output checksum if available\n");
     fprintf(stderr, "  -v, --verbose             Show progress\n");
+    fprintf(stderr, "  --source-mode <m>         Source backend: auto|mmap|direct (default: auto)\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Source modes:\n");
+    fprintf(stderr, "  auto    mmap for regular files; O_DIRECT for block devices (recommended)\n");
+    fprintf(stderr, "  mmap    force mmap (page-cache-backed; unsafe on mounted partitions)\n");
+    fprintf(stderr, "  direct  force O_DIRECT pread; fails if filesystem does not support it\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Examples:\n");
 #ifndef FSDIFF_PATCH_ONLY
@@ -85,6 +99,7 @@ static int cmd_create(int argc, char **argv) {
         {"scalar",          no_argument,       0, 'S'},
         {"verbose",         no_argument,       0, 'v'},
         {"very-verbose",    no_argument,       0, 'V'},
+        {"source-mode",     required_argument, 0, 'M'},
         {"help",            no_argument,       0, 'h'},
         {0, 0, 0, 0}
     };
@@ -127,6 +142,12 @@ static int cmd_create(int argc, char **argv) {
         case 'V':
             verbose = 1;
             opts.verbose = true;
+            break;
+        case 'M':
+            if (parse_source_mode(optarg, &opts.source_mode) < 0) {
+                fprintf(stderr, "Error: --source-mode must be auto|mmap|direct\n");
+                return 1;
+            }
             break;
         case 'h':
             print_usage(argv[0]);
@@ -205,9 +226,10 @@ static int cmd_create(int argc, char **argv) {
 
 static int cmd_apply(int argc, char **argv) {
     static struct option long_options[] = {
-        {"verify",  no_argument, 0, 'V'},
-        {"verbose", no_argument, 0, 'v'},
-        {"help",    no_argument, 0, 'h'},
+        {"verify",      no_argument,       0, 'V'},
+        {"verbose",     no_argument,       0, 'v'},
+        {"source-mode", required_argument, 0, 'M'},
+        {"help",        no_argument,       0, 'h'},
         {0, 0, 0, 0}
     };
 
@@ -223,6 +245,12 @@ static int cmd_apply(int argc, char **argv) {
             break;
         case 'v':
             verbose = 1;
+            break;
+        case 'M':
+            if (parse_source_mode(optarg, &opts.source_mode) < 0) {
+                fprintf(stderr, "Error: --source-mode must be auto|mmap|direct\n");
+                return 1;
+            }
             break;
         case 'h':
             print_usage(argv[0]);

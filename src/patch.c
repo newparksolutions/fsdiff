@@ -12,7 +12,9 @@
 #include "platform.h"
 #include "encoding/bkdf_header.h"
 #include "io/mmap_reader.h"
+#include "io/source_reader.h"
 #include "simd/simd_dispatch.h"
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -26,6 +28,7 @@ void fsd_patch_options_init(fsd_patch_options_t *opts) {
     if (!opts) return;
     memset(opts, 0, sizeof(*opts));
     opts->verify_output = false;
+    opts->source_mode = FSD_SOURCE_AUTO;
     opts->allocator = NULL;
 }
 
@@ -125,49 +128,61 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
 
     fsd_error_t err;
 
-    /* Open source file */
-    fsd_mmap_reader_t *src_reader = NULL;
-    err = fsd_mmap_open(&src_reader, src_path);
+    /* Open source. Auto-detect picks O_DIRECT for block devices to avoid
+     * the bdev page cache aliased with the FS driver's dirty metadata
+     * buffers on a read-only mount; regular files use mmap. */
+    fsd_source_reader_t *src_reader = NULL;
+    err = fsd_source_reader_open(&src_reader, src_path, ctx->opts.source_mode);
     if (err != FSD_SUCCESS) return err;
 
-    /* Open patch file */
+    /* Open patch file (mmap is fine — patches are normally separate files,
+     * not on the partition being patched). */
     fsd_mmap_reader_t *patch_reader = NULL;
     err = fsd_mmap_open(&patch_reader, patch_path);
     if (err != FSD_SUCCESS) {
-        fsd_mmap_close(src_reader);
+        fsd_source_reader_close(src_reader);
         return err;
     }
 
-    const uint8_t *src_data = fsd_mmap_data(src_reader);
     const uint8_t *patch_data = fsd_mmap_data(patch_reader);
     size_t patch_size = fsd_mmap_size(patch_reader);
-    size_t src_size = fsd_mmap_size(src_reader);
+    size_t src_size = fsd_source_reader_size(src_reader);
 
     /* Read and validate header */
     fsd_header_t header;
     err = fsd_header_read_memory(patch_data, patch_size, &header);
     if (err != FSD_SUCCESS) {
         fsd_mmap_close(patch_reader);
-        fsd_mmap_close(src_reader);
+        fsd_source_reader_close(src_reader);
         return err;
     }
 
     size_t block_size = 1ULL << header.block_size_log2;
 
+    /* Cap dest_blocks so that dest_blocks * block_size fits in int64_t.
+     * Subsequent block-offset arithmetic uses signed 64-bit (COPY_RELOCATE
+     * and COPY_ADD), so this single check makes all downstream multiplications
+     * and casts well-defined; without it a malicious header can wrap. */
+    if (header.dest_blocks > (uint64_t)INT64_MAX / block_size) {
+        fsd_mmap_close(patch_reader);
+        fsd_source_reader_close(src_reader);
+        return FSD_ERR_CORRUPT_DATA;
+    }
+
     /* Validate stream lengths don't exceed patch file size */
     if (patch_size < FSD_HEADER_SIZE) {
         fsd_mmap_close(patch_reader);
-        fsd_mmap_close(src_reader);
+        fsd_source_reader_close(src_reader);
         return FSD_ERR_TRUNCATED;
     }
     if (header.op_stream_len > patch_size - FSD_HEADER_SIZE) {
         fsd_mmap_close(patch_reader);
-        fsd_mmap_close(src_reader);
+        fsd_source_reader_close(src_reader);
         return FSD_ERR_CORRUPT_DATA;
     }
     if (header.diff_stream_len > patch_size - FSD_HEADER_SIZE - header.op_stream_len) {
         fsd_mmap_close(patch_reader);
-        fsd_mmap_close(src_reader);
+        fsd_source_reader_close(src_reader);
         return FSD_ERR_CORRUPT_DATA;
     }
 
@@ -183,7 +198,7 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
     FILE *output = fopen(output_path, "wb");
     if (!output) {
         fsd_mmap_close(patch_reader);
-        fsd_mmap_close(src_reader);
+        fsd_source_reader_close(src_reader);
         return FSD_ERR_IO;
     }
 
@@ -192,7 +207,7 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
     if (!block_buf) {
         fclose(output);
         fsd_mmap_close(patch_reader);
-        fsd_mmap_close(src_reader);
+        fsd_source_reader_close(src_reader);
         return FSD_ERR_OUT_OF_MEMORY;
     }
 
@@ -211,6 +226,14 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
         if (op_type != FSD_OP_COPY_ADD) {
             err = read_count(&op_ptr, op_end, first_byte, &count);
             if (err != FSD_SUCCESS) goto error;
+            /* Bound count so dest_block + count cannot exceed dest_blocks.
+             * Guards against unbounded work and stops a malicious patch from
+             * driving downstream arithmetic past the (already-validated)
+             * dest_blocks ceiling. */
+            if (count > header.dest_blocks - dest_block) {
+                err = FSD_ERR_CORRUPT_DATA;
+                goto error;
+            }
         }
 
         switch (op_type) {
@@ -223,7 +246,9 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
                     err = FSD_ERR_CORRUPT_DATA;
                     goto error;
                 }
-                if (fwrite(src_data + src_offset, 1, block_size, output) != block_size) {
+                err = fsd_source_reader_read_at(src_reader, src_offset, block_size, block_buf);
+                if (err != FSD_SUCCESS) goto error;
+                if (fwrite(block_buf, 1, block_size, output) != block_size) {
                     err = FSD_ERR_IO;
                     goto error;
                 }
@@ -266,7 +291,9 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
                     err = FSD_ERR_CORRUPT_DATA;
                     goto error;
                 }
-                if (fwrite(src_data + src_offset, 1, block_size, output) != block_size) {
+                err = fsd_source_reader_read_at(src_reader, src_offset, block_size, block_buf);
+                if (err != FSD_SUCCESS) goto error;
+                if (fwrite(block_buf, 1, block_size, output) != block_size) {
                     err = FSD_ERR_IO;
                     goto error;
                 }
@@ -306,30 +333,46 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
             uint8_t offset_enc = (first_byte >> 1) & 0x3;
             uint8_t diff_fmt = first_byte & 0x1;
 
-            /* Read byte_offset (signed, two's complement) */
+            /* COPY_ADD has no inline-count form: bits[2:0] are offset_enc + diff_fmt.
+             * Reject rather than silently mis-decode the flag bits as a count. */
+            if (count_enc == 3) {
+                err = FSD_ERR_CORRUPT_DATA;
+                goto error;
+            }
+
+            /* Read byte_offset (signed, two's complement). Each byte is
+             * widened to uint32_t before shifting to keep the high-bit case
+             * (op_ptr[N] & 0x80) inside unsigned arithmetic; shifting into
+             * the sign of a signed int is UB. */
             int64_t byte_offset = 0;
             switch (offset_enc) {
-            case 0:  /* 2 bytes */
+            case 0: {  /* 2 bytes */
                 if (op_ptr + 2 > op_end) { err = FSD_ERR_TRUNCATED; goto error; }
-                byte_offset = (int16_t)(op_ptr[0] | (op_ptr[1] << 8));
+                uint32_t raw = (uint32_t)op_ptr[0] | ((uint32_t)op_ptr[1] << 8);
+                byte_offset = (int16_t)raw;
                 op_ptr += 2;
                 break;
-            case 1:  /* 3 bytes */
+            }
+            case 1: {  /* 3 bytes */
                 if (op_ptr + 3 > op_end) { err = FSD_ERR_TRUNCATED; goto error; }
-                byte_offset = op_ptr[0] | (op_ptr[1] << 8) | (op_ptr[2] << 16);
-                /* Sign extend from 24 bits */
-                if (byte_offset & 0x800000) byte_offset |= (int64_t)0xFFFFFFFFFF000000LL;
+                uint32_t raw = (uint32_t)op_ptr[0] | ((uint32_t)op_ptr[1] << 8) |
+                               ((uint32_t)op_ptr[2] << 16);
+                byte_offset = (raw & 0x800000u) ? (int64_t)(raw | 0xFFFFFFFFFF000000LL)
+                                                : (int64_t)raw;
                 op_ptr += 3;
                 break;
-            case 2:  /* 4 bytes */
+            }
+            case 2: {  /* 4 bytes */
                 if (op_ptr + 4 > op_end) { err = FSD_ERR_TRUNCATED; goto error; }
-                byte_offset = (int32_t)(op_ptr[0] | (op_ptr[1] << 8) |
-                              (op_ptr[2] << 16) | (op_ptr[3] << 24));
+                uint32_t raw = (uint32_t)op_ptr[0] | ((uint32_t)op_ptr[1] << 8) |
+                               ((uint32_t)op_ptr[2] << 16) | ((uint32_t)op_ptr[3] << 24);
+                byte_offset = (int32_t)raw;
                 op_ptr += 4;
                 break;
             }
+            }
 
-            /* Read count */
+            /* Read count (count_enc=3 already rejected above). */
             switch (count_enc) {
             case 0:
                 if (op_ptr >= op_end) { err = FSD_ERR_TRUNCATED; goto error; }
@@ -346,9 +389,12 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
                         ((uint32_t)op_ptr[2] << 16) | ((uint32_t)op_ptr[3] << 24);
                 op_ptr += 4;
                 break;
-            case 3:
-                count = (first_byte & 0x7) + 1;  /* Shouldn't happen for COPY_ADD */
-                break;
+            }
+
+            /* Same count bound as the non-COPY_ADD path. */
+            if (count > header.dest_blocks - dest_block) {
+                err = FSD_ERR_CORRUPT_DATA;
+                goto error;
             }
 
             /* Read diff_len */
@@ -381,18 +427,24 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
                 }
 
                 /* Read source block into buffer */
-                memcpy(block_buf, src_data + src_byte_pos, block_size);
+                err = fsd_source_reader_read_at(src_reader, (uint64_t)src_byte_pos,
+                                                block_size, block_buf);
+                if (err != FSD_SUCCESS) goto error;
 
                 if (diff_fmt == 0) {
-                    /* Dense format: one diff byte per output byte */
-                    size_t blk_offset = blk * block_size;
-                    /* Validate diff_cursor bounds */
-                    if (blk_offset + block_size > diff_len) {
+                    /* Dense format: one diff byte per output byte. Compute
+                     * the per-block offset in uint64_t — on 32-bit hosts a
+                     * 32-bit size_t multiplication can wrap before the
+                     * bounds check sees it. diff_len is uint32_t (≤4 GiB),
+                     * so the post-bounds-check value always fits in size_t. */
+                    uint64_t blk_offset = (uint64_t)blk * (uint64_t)block_size;
+                    if (blk_offset > diff_len ||
+                        block_size > (size_t)(diff_len - blk_offset)) {
                         err = FSD_ERR_TRUNCATED;
                         goto error;
                     }
                     for (size_t k = 0; k < block_size; k++) {
-                        block_buf[k] += diff_cursor[blk_offset + k];
+                        block_buf[k] += diff_cursor[(size_t)blk_offset + k];
                     }
                 } else {
                     /* Sparse format: alternating copy-add/copy runs with base-128 lengths */
@@ -481,7 +533,7 @@ error:
     free(block_buf);
     fclose(output);
     fsd_mmap_close(patch_reader);
-    fsd_mmap_close(src_reader);
+    fsd_source_reader_close(src_reader);
 
     if (err != FSD_SUCCESS) {
         fsd_unlink(output_path);

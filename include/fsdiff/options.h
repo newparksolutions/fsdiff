@@ -19,6 +19,24 @@ extern "C" {
 #endif
 
 /**
+ * Source reader backend selection.
+ *
+ * Block-device sources (e.g. /dev/mmcblk0p5) underlying a mounted FS share
+ * the bdev page cache with the FS driver, which dirties metadata buffers
+ * in memory without writing them back on a read-only mount. Reading via
+ * mmap or buffered I/O therefore returns the modified-in-memory bytes,
+ * not what is on disk. O_DIRECT bypasses that cache entirely.
+ *
+ * AUTO is the safe default: regular files use mmap; block devices are
+ * forced through O_DIRECT and refuse to fall back if it fails.
+ */
+typedef enum {
+    FSD_SOURCE_AUTO   = 0,  /**< stat() picks: S_ISBLK -> direct, else mmap */
+    FSD_SOURCE_MMAP   = 1,  /**< force mmap (page-cache-backed) */
+    FSD_SOURCE_DIRECT = 2,  /**< force O_DIRECT pread; fail if unsupported */
+} fsd_source_mode_t;
+
+/**
  * Options for diff generation.
  */
 typedef struct {
@@ -49,6 +67,9 @@ typedef struct {
     /** Verbose output for all stages (default: false) */
     bool verbose;
 
+    /** Source reader backend (default: FSD_SOURCE_AUTO) */
+    fsd_source_mode_t source_mode;
+
     /** Custom allocator (NULL for default) */
     fsd_allocator_t *allocator;
 
@@ -60,6 +81,9 @@ typedef struct {
 typedef struct {
     /** Verify output checksum after patching (default: false) */
     bool verify_output;
+
+    /** Source reader backend (default: FSD_SOURCE_AUTO) */
+    fsd_source_mode_t source_mode;
 
     /** Custom allocator (NULL for default) */
     fsd_allocator_t *allocator;
