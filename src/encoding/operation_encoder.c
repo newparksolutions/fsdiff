@@ -244,9 +244,19 @@ fsd_error_t fsd_op_encoder_encode(fsd_op_encoder_t *encoder,
             int64_t byte_offset = (int64_t)(state->src_index * block_size + state->byte_offset)
                                 - (int64_t)(i * block_size);
 
+            /* Cap the run so the worst-case sparse diff_len stays inside the
+             * 32-bit diff_len field of OP_COPY_ADD. Sparse can emit up to
+             * 2 bytes per output byte, so:
+             *     run_count * block_size * 2 <= UINT32_MAX
+             * If the run would otherwise be longer, the leftover blocks fall
+             * to the next outer-loop iteration and start a new (identical)
+             * COPY_ADD op — no information lost, just a split. */
+            uint64_t max_run_for_format = (uint64_t)UINT32_MAX / (block_size * 2);
+            if (max_run_for_format == 0) max_run_for_format = 1;
+
             /* Try to coalesce consecutive partial matches with same relative byte offset */
             run_count = 1;
-            while (i + run_count < tracker->count) {
+            while (i + run_count < tracker->count && run_count < max_run_for_format) {
                 const fsd_block_state_t *next = fsd_block_tracker_get(tracker, i + run_count);
                 if (next->match_type != FSD_MATCH_PARTIAL) break;
 
@@ -416,7 +426,12 @@ fsd_error_t fsd_op_encoder_encode(fsd_op_encoder_t *encoder,
             }
             if (err != FSD_SUCCESS) { free(diff_buf); return err; }
 
-            /* Write diff_len */
+            /* Write diff_len. The run_count cap above keeps this under
+             * UINT32_MAX; the explicit check is defence-in-depth. */
+            if (diff_len > UINT32_MAX) {
+                free(diff_buf);
+                return FSD_ERR_OUT_OF_MEMORY;
+            }
             err = fsd_writer_write_u32_le(op_writer, (uint32_t)diff_len);
             if (err != FSD_SUCCESS) { free(diff_buf); return err; }
 

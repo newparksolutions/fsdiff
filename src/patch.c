@@ -570,7 +570,11 @@ fsd_error_t fsd_patch_output_size(const char *patch_path,
         return err;
     }
 
-    *size_out = header.dest_blocks * (1ULL << header.block_size_log2);
+    uint64_t block_size = 1ULL << header.block_size_log2;
+    if (header.dest_blocks > UINT64_MAX / block_size) {
+        return FSD_ERR_CORRUPT_DATA;
+    }
+    *size_out = header.dest_blocks * block_size;
     return FSD_SUCCESS;
 }
 
@@ -609,23 +613,48 @@ const char *fsd_strerror(fsd_error_t err) {
     }
 }
 
-/* Library initialization */
-static FSD_ATOMIC int g_initialized = 0;
+/* Library initialization.
+ *
+ * Three-state init: 0 = uninitialised, 1 = in progress, 2 = done.
+ * Exactly one thread wins the CAS from 0 to 1, runs fsd_simd_init (which
+ * mutates the global g_fsd_simd dispatch table), and publishes 2 with a
+ * release store. Other threads either see 2 already and return, or wait
+ * on an acquire load. This avoids torn reads of g_fsd_simd by readers
+ * concurrent with a still-running fsd_simd_init. */
+static FSD_ATOMIC int g_init_state = 0;
 
 fsd_error_t fsd_init(void) {
-    if (fsd_atomic_load(g_initialized)) {
+#if !defined(__STDC_NO_ATOMICS__)
+    if (atomic_load_explicit(&g_init_state, memory_order_acquire) == 2) {
         return FSD_SUCCESS;
     }
 
-    /* Initialize SIMD dispatch (idempotent - safe if two threads race here) */
-    fsd_simd_init();
-
-    fsd_atomic_store(g_initialized, 1);
+    int expected = 0;
+    if (atomic_compare_exchange_strong_explicit(
+            &g_init_state, &expected, 1,
+            memory_order_acquire, memory_order_relaxed)) {
+        fsd_simd_init();
+        atomic_store_explicit(&g_init_state, 2, memory_order_release);
+    } else {
+        /* Another thread is initialising — wait for it to publish state 2. */
+        while (atomic_load_explicit(&g_init_state, memory_order_acquire) != 2) {
+            /* spin */
+        }
+    }
+#else
+    /* No C11 atomics: fall back to the previous best-effort behaviour.
+     * Concurrent callers can race; documented as a constraint of this
+     * compiler/platform combination. */
+    if (g_init_state != 2) {
+        fsd_simd_init();
+        g_init_state = 2;
+    }
+#endif
     return FSD_SUCCESS;
 }
 
 void fsd_cleanup(void) {
-    fsd_atomic_store(g_initialized, 0);
+    fsd_atomic_store(g_init_state, 0);
 }
 
 const char *fsd_version(void) {

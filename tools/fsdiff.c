@@ -315,17 +315,22 @@ static int cmd_info(int argc, char **argv) {
         return 1;
     }
 
-    size_t block_size = (size_t)1 << header.block_size_log2;
-    size_t output_size = header.dest_blocks * block_size;
+    uint64_t block_size = 1ULL << header.block_size_log2;
 
     printf("Patch file: %s\n", patch_path);
     printf("\n");
     printf("Format:           BKDF (Binary Block Diff Format)\n");
     printf("Version:          %u\n", header.version);
-    printf("Block size:       %zu bytes (2^%u)\n", block_size, header.block_size_log2);
-    printf("Output blocks:    %lu\n", (unsigned long)header.dest_blocks);
-    printf("Output size:      %lu bytes (%.2f MiB)\n",
-           (unsigned long)output_size, output_size / (1024.0 * 1024.0));
+    printf("Block size:       %" PRIu64 " bytes (2^%u)\n",
+           block_size, header.block_size_log2);
+    printf("Output blocks:    %" PRIu64 "\n", header.dest_blocks);
+    if (header.dest_blocks > UINT64_MAX / block_size) {
+        printf("Output size:      (overflows 64-bit; corrupt header)\n");
+    } else {
+        uint64_t output_size = header.dest_blocks * block_size;
+        printf("Output size:      %" PRIu64 " bytes (%.2f MiB)\n",
+               output_size, output_size / (1024.0 * 1024.0));
+    }
     printf("\n");
     printf("Stream sizes:\n");
     printf("  Operations:     %lu bytes\n", (unsigned long)header.op_stream_len);

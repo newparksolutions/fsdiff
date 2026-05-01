@@ -103,8 +103,9 @@ void *fsd_pool_alloc(fsd_memory_pool_t *pool, size_t size) {
 
     fsd_pool_chunk_t *chunk = pool->current;
 
-    /* Check if current chunk has space */
-    if (chunk && chunk->used + size <= chunk->size) {
+    /* Check if current chunk has space. Subtraction-against-free-space
+     * form avoids overflow if chunk->used is near SIZE_MAX. */
+    if (chunk && size <= chunk->size - chunk->used) {
         void *ptr = chunk->data + chunk->used;
         chunk->used += size;
         return ptr;
@@ -140,13 +141,18 @@ void *fsd_pool_alloc_aligned(fsd_memory_pool_t *pool, size_t size, size_t alignm
         uintptr_t aligned = (addr + alignment - 1) & ~(alignment - 1);
         size_t padding = aligned - addr;
 
-        if (chunk->used + padding + size <= chunk->size) {
+        /* Overflow-safe: free = chunk->size - chunk->used, then check
+         * padding + size <= free without ever adding to chunk->used. */
+        size_t free_space = chunk->size - chunk->used;
+        if (padding <= free_space && size <= free_space - padding) {
             chunk->used += padding + size;
             return (void *)aligned;
         }
     }
 
-    /* Need new chunk - ensure it's aligned from the start */
+    /* Need new chunk - ensure it's aligned from the start. Reject sizes
+     * that would overflow when padded for alignment. */
+    if (size > SIZE_MAX - (alignment - 1)) return NULL;
     size_t new_size = size + alignment - 1;
     if (new_size < pool->chunk_size) new_size = pool->chunk_size;
 

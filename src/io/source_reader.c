@@ -276,8 +276,11 @@ static fsd_error_t direct_read_at(fsd_source_reader_t *r,
 static fsd_error_t direct_materialize(fsd_source_reader_t *r) {
     if (r->slurp) return FSD_SUCCESS;
     if (r->file_size == 0) {
-        /* Nothing to slurp; return a non-NULL but unreadable pointer. */
-        r->slurp = ((uint8_t *)NULL) + 1;
+        /* Nothing to slurp. Downstream stage_controller_run rejects NULL
+         * data pointers, so hand back a valid (but unreadable) address —
+         * a static dummy byte. The close path skips freeing on file_size==0. */
+        static uint8_t empty_byte;
+        r->slurp = &empty_byte;
         return FSD_SUCCESS;
     }
 
