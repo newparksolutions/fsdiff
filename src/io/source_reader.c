@@ -64,6 +64,12 @@ struct fsd_source_reader {
     size_t   alignment;     /* device logical block size, power of two */
     uint8_t *scratch;       /* aligned scratch_size buffer for read_at */
     size_t   scratch_size;  /* >= alignment */
+    /* Read cache: scratch currently holds [scratch_off, scratch_off +
+     * scratch_valid) of the source. valid==0 means "empty / invalid".
+     * Patch application reads many small block-sized chunks sequentially;
+     * caching avoids re-issuing one O_DIRECT pread per chunk. */
+    uint64_t scratch_off;
+    size_t   scratch_valid;
     uint8_t *slurp;         /* lazily allocated full-image buffer for data() */
 };
 
@@ -246,28 +252,41 @@ static fsd_error_t direct_read_at(fsd_source_reader_t *r,
     size_t   align_mask = align - 1;
 
     while (len > 0) {
-        uint64_t aligned_off = offset & ~(uint64_t)align_mask;
-        size_t   skip        = (size_t)(offset - aligned_off);
+        /* Serve from cache if the request starts inside the current
+         * scratch contents. The loop continues with the remainder. */
+        if (r->scratch_valid > 0 &&
+            offset >= r->scratch_off &&
+            offset < r->scratch_off + r->scratch_valid) {
+            size_t cached_off = (size_t)(offset - r->scratch_off);
+            size_t available  = r->scratch_valid - cached_off;
+            size_t copy       = (len < available) ? len : available;
+            memcpy(out, r->scratch + cached_off, copy);
+            out    += copy;
+            offset += copy;
+            len    -= copy;
+            continue;
+        }
 
-        /* Aligned chunk we can fit in scratch this iteration. */
-        size_t chunk = r->scratch_size;
-        /* Don't read past size rounded up — pread_full zero-pads tail. */
-        size_t max_aligned = round_up_pow2(r->file_size, align);
+        /* Miss: refill scratch with an aligned region containing offset.
+         * pread_full zero-pads beyond EOF (the file's last partial block). */
+        uint64_t aligned_off = offset & ~(uint64_t)align_mask;
+        size_t   chunk       = r->scratch_size;
+        size_t   max_aligned = round_up_pow2(r->file_size, align);
         if (aligned_off + chunk > max_aligned) {
             chunk = (size_t)(max_aligned - aligned_off);
         }
+
+        /* Invalidate before the read so a failure can't leave the cache
+         * pointing at stale-but-marked-valid bytes. */
+        r->scratch_valid = 0;
 
         fsd_error_t err = pread_full(r->fd, r->scratch, chunk,
                                      (off_t)aligned_off, r->file_size);
         if (err != FSD_SUCCESS) return err;
 
-        size_t available = chunk - skip;
-        size_t copy      = (len < available) ? len : available;
-        memcpy(out, r->scratch + skip, copy);
-
-        out    += copy;
-        offset += copy;
-        len    -= copy;
+        r->scratch_off   = aligned_off;
+        r->scratch_valid = chunk;
+        /* Loop iteration will copy from the now-populated cache. */
     }
 
     return FSD_SUCCESS;

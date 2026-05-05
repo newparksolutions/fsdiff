@@ -57,6 +57,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <errno.h>
 
 /* Declare mkstemp if not already declared (POSIX.1-2008) */
 #if !defined(__USE_XOPEN2K8) && !defined(__APPLE__) && !defined(__FreeBSD__)
@@ -167,6 +168,39 @@ static inline int fsd_create_temp_file(const char *template_prefix, char *path_o
     /* Unix: use mkstemp */
     snprintf(path_out, 256, "/tmp/%s_XXXXXX", template_prefix);
     return mkstemp(path_out);
+#endif
+}
+
+/**
+ * Test whether a path is a regular file or doesn't exist.
+ *
+ * Used to decide whether an output path is safe to unlink during error
+ * cleanup. Block-device nodes, named pipes, sockets, directories, and
+ * other special files must NOT be unlinked: removing /dev/mmcblk0p3
+ * (for example) destroys the device node, and a subsequent
+ * fopen(path, "wb") would silently create a regular file in its place.
+ *
+ * Returns 1 if path is a regular file or doesn't exist, 0 otherwise
+ * (including on stat errors other than ENOENT — conservative).
+ */
+static inline int fsd_path_is_regular_or_missing(const char *path) {
+#ifdef _WIN32
+    DWORD attrs = GetFileAttributesA(path);
+    if (attrs == INVALID_FILE_ATTRIBUTES) {
+        DWORD err = GetLastError();
+        return (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND);
+    }
+    if (attrs & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT |
+                 FILE_ATTRIBUTE_DEVICE)) {
+        return 0;
+    }
+    return 1;
+#else
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        return errno == ENOENT;
+    }
+    return S_ISREG(st.st_mode) ? 1 : 0;
 #endif
 }
 
