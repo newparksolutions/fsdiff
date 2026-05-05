@@ -29,6 +29,11 @@
 #include <errno.h>
 #endif
 
+#if defined(__linux__)
+#include <sys/ioctl.h>
+#include <linux/fs.h>
+#endif
+
 fsd_error_t fsd_mmap_open(fsd_mmap_reader_t **reader_out, const char *path) {
     if (!reader_out || !path) {
         return FSD_ERR_INVALID_ARG;
@@ -133,16 +138,43 @@ fsd_error_t fsd_mmap_open(fsd_mmap_reader_t **reader_out, const char *path) {
         free(reader);
         return FSD_ERR_IO;
     }
-    /* Reject files that don't fit in size_t (32-bit hosts with >4 GiB). */
-    if (st.st_size < 0 || (uint64_t)st.st_size > (uint64_t)SIZE_MAX) {
+    if (st.st_size < 0) {
         close(reader->fd);
         free(reader);
         return FSD_ERR_IO;
     }
-    reader->file_size = (size_t)st.st_size;
+
+    uint64_t raw_size = (uint64_t)st.st_size;
+
+    /* Block devices report st_size = 0 because the kernel doesn't track
+     * device size in the inode. Query it explicitly so mmap'ing an
+     * unmounted partition (--source-mode mmap) works. */
+    if (raw_size == 0 && S_ISBLK(st.st_mode)) {
+#if defined(__linux__) && defined(BLKGETSIZE64)
+        uint64_t bdev_size = 0;
+        if (ioctl(reader->fd, BLKGETSIZE64, &bdev_size) == 0) {
+            raw_size = bdev_size;
+        }
+#endif
+        if (raw_size == 0) {
+            /* Fallback for non-Linux block devices or kernels without
+             * BLKGETSIZE64: seek to end. */
+            off_t end = lseek(reader->fd, 0, SEEK_END);
+            if (end > 0) raw_size = (uint64_t)end;
+            (void)lseek(reader->fd, 0, SEEK_SET);
+        }
+    }
+
+    /* Reject sizes that don't fit in size_t (32-bit hosts with >4 GiB). */
+    if (raw_size > (uint64_t)SIZE_MAX) {
+        close(reader->fd);
+        free(reader);
+        return FSD_ERR_IO;
+    }
+    reader->file_size = (size_t)raw_size;
 
     if (reader->file_size == 0) {
-        /* Empty file - no mapping needed */
+        /* Genuinely empty - no mapping needed. */
         reader->base_addr = NULL;
         *reader_out = reader;
         return FSD_SUCCESS;
