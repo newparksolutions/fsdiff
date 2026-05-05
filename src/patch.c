@@ -194,6 +194,14 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
     const uint8_t *lit_stream = diff_end;
     const uint8_t *lit_end = patch_data + patch_size;
 
+    /* Capture the path's type BEFORE fopen so we know whether on-error
+     * cleanup is allowed to unlink it. Block-device nodes (and other
+     * special files) must be preserved: unlinking /dev/mmcblk0p3 removes
+     * the device node, and the next fopen("wb") would silently create a
+     * regular file at that path. The check is intentionally upfront so
+     * we test what the user pointed at, not what we may have created. */
+    int may_unlink_on_error = fsd_path_is_regular_or_missing(output_path);
+
     /* Create output file */
     FILE *output = fopen(output_path, "wb");
     if (!output) {
@@ -535,7 +543,7 @@ error:
     fsd_mmap_close(patch_reader);
     fsd_source_reader_close(src_reader);
 
-    if (err != FSD_SUCCESS) {
+    if (err != FSD_SUCCESS && may_unlink_on_error) {
         fsd_unlink(output_path);
     }
 
