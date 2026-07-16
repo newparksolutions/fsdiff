@@ -101,6 +101,16 @@ fsd_error_t fsd_pool_create(fsd_memory_pool_t **pool_out,
 void *fsd_pool_alloc(fsd_memory_pool_t *pool, size_t size) {
     if (!pool || size == 0) return NULL;
 
+    /* Round the size up to 8 bytes so a single odd-sized allocation (e.g. a
+     * string) cannot misalign every subsequent allocation carved from the
+     * same chunk. Chunk data starts at a malloc'd (hence >= 8-aligned)
+     * address, so keeping sizes 8-aligned keeps every returned pointer
+     * 8-aligned — required by callers that store pointer/uint64 typed
+     * structures (hash entries, file tables) in pool memory, and a fault on
+     * strict-alignment targets otherwise. */
+    if (size > (size_t)-1 - 7) return NULL;
+    size = (size + 7) & ~(size_t)7;
+
     fsd_pool_chunk_t *chunk = pool->current;
 
     /* Check if current chunk has space. Subtraction-against-free-space

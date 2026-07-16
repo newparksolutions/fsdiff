@@ -156,6 +156,12 @@ fsd_error_t fsd_relocation_stage_run(fsd_relocation_stage_t *stage,
         }
 
         const fsd_block_state_t *state = fsd_block_tracker_get(tracker, dest_idx);
+        /* dest_crc comes from the identity stage, which computes each block's
+         * CRC32 while it does its byte comparison (sharing the read to avoid a
+         * second pass over the data). Relocation therefore requires the identity
+         * stage to have run; otherwise every CRC32 is zero (calloc'd tracker) and
+         * no relocations are found. The caller must keep identity enabled when
+         * relocation is enabled (the CLI enforces this; see options.h). */
         uint32_t dest_crc = state->crc32;
 
         /* Look up in source hash table */

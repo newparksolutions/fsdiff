@@ -73,6 +73,26 @@ static fsd_error_t encode_count(fsd_buffered_writer_t *writer,
     }
 }
 
+/* Emit a run of blocks as OP_LITERAL, copying their bytes verbatim from the
+ * destination image into the literal stream. Used both for genuinely
+ * unmatched blocks and as a correctness fallback when a match's offset is too
+ * large to represent in the format's 4-byte offset fields (see the RELOCATE
+ * and COPY_ADD cases) — falling back to literal loses compression but never
+ * corrupts output. */
+static fsd_error_t emit_literal_run(fsd_buffered_writer_t *op_writer,
+                                    fsd_buffered_writer_t *lit_writer,
+                                    const uint8_t *dest_data,
+                                    size_t block_size,
+                                    uint64_t first_block,
+                                    uint64_t run_count) {
+    uint8_t op_byte = (FSD_OP_LITERAL << 5);
+    fsd_error_t err = encode_count(op_writer, op_byte, run_count);
+    if (err != FSD_SUCCESS) return err;
+
+    const uint8_t *lit_data = dest_data + (first_block * block_size);
+    return fsd_writer_write(lit_writer, lit_data, run_count * block_size);
+}
+
 fsd_error_t fsd_op_encoder_create(fsd_op_encoder_t **encoder_out,
                                   size_t block_size) {
     if (!encoder_out || block_size == 0) {
@@ -159,6 +179,19 @@ fsd_error_t fsd_op_encoder_encode(fsd_op_encoder_t *encoder,
             /* Determine offset encoding */
             uint64_t abs_offset = (offset < 0) ? (uint64_t)(-offset) : (uint64_t)offset;
             uint8_t sign_bit = (offset < 0) ? 1 : 0;
+
+            /* The format's largest offset field is 4 bytes (unsigned block
+             * offset). If the relocation distance exceeds that, we cannot
+             * encode it; fall back to literal for the whole run rather than
+             * truncating the offset and producing a patch that copies from
+             * the wrong source position. */
+            if (abs_offset > 0xFFFFFFFFu) {
+                err = emit_literal_run(op_writer, lit_writer, dest_data,
+                                       block_size, i, run_count);
+                if (err != FSD_SUCCESS) return err;
+                break;
+            }
+
             uint8_t offset_enc;
             if (abs_offset <= 0xFF) {
                 offset_enc = 0;  /* 1 byte */
@@ -265,6 +298,20 @@ fsd_error_t fsd_op_encoder_encode(fsd_op_encoder_t *encoder,
                 if (next_byte_offset != byte_offset) break;
 
                 run_count++;
+            }
+
+            /* The COPY_ADD byte_offset is signed and encoded in at most 4 bytes
+             * (int32 range). byte_offset is invariant across the coalesced run
+             * (that is the coalescing condition above), so a single check covers
+             * every block. If it doesn't fit, fall back to literal rather than
+             * truncating to 32 bits and reading from the wrong source position.
+             * Reachable on images > 2 GiB via the relocation-relative search in
+             * the partial stage. */
+            if (byte_offset < INT32_MIN || byte_offset > INT32_MAX) {
+                err = emit_literal_run(op_writer, lit_writer, dest_data,
+                                       block_size, i, run_count);
+                if (err != FSD_SUCCESS) return err;
+                break;  /* falls through to the shared "i += run_count" below */
             }
 
             /* Count non-zero diff bytes across all blocks to decide format */
@@ -446,13 +493,8 @@ fsd_error_t fsd_op_encoder_encode(fsd_op_encoder_t *encoder,
         case FSD_MATCH_NONE:
         default: {
             /* OP_LITERAL (5): [5:3][count_enc:2][000:3] [count] */
-            uint8_t op_byte = (FSD_OP_LITERAL << 5);
-            err = encode_count(op_writer, op_byte, run_count);
-            if (err != FSD_SUCCESS) return err;
-
-            /* Write literal data */
-            const uint8_t *lit_data = dest_data + (i * block_size);
-            err = fsd_writer_write(lit_writer, lit_data, run_count * block_size);
+            err = emit_literal_run(op_writer, lit_writer, dest_data,
+                                   block_size, i, run_count);
             if (err != FSD_SUCCESS) return err;
             break;
         }
