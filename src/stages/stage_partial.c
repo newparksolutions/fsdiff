@@ -8,54 +8,38 @@
  * @brief Stage 3: Local search partial matching implementation
  *
  * This stage finds approximate matches by searching nearby offsets:
- * 1. For each unmatched block, search offsets -32768 to +32768
- * 2. If match found, extend to adjacent unmatched blocks
- * 3. If no match but previous block was relocated, search relative to that
+ * 1. For each unmatched block, probe the continuation of the previous
+ *    block's match and the block's own position with one exact count each
+ * 2. Failing that, sweep byte offsets within the configured search radius
+ *    (options.search_radius blocks, default 8 = +/-32 KiB at 4 KiB blocks),
+ *    prescreening each candidate with a 256-byte sample
+ * 3. If match found, extend to adjacent unmatched blocks
+ * 4. If no match but previous block was relocated, search relative to that
  */
 
 #include "stage_partial.h"
-#include "../simd/simd_dispatch.h"
+#include "block_search.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
-/* Search range for partial matching */
-#define SEARCH_RANGE 32768
+/* Default search radius in blocks (8 blocks * 4096 = the historical +/-32 KiB
+ * byte range). Used when the caller passes search_radius_blocks <= 0. */
+#define DEFAULT_SEARCH_RADIUS_BLOCKS 8
 
 struct fsd_partial_stage {
     size_t block_size;
     float threshold;        /* Fraction of bytes that must match (0.0-1.0) */
+    size_t search_range;    /* Search radius around each block, in bytes */
     uint64_t src_blocks;
     uint64_t src_size;
     int verbose;
 };
 
-/**
- * Count matching bytes between two blocks using SIMD when available.
- *
- * @param a     First block
- * @param b     Second block
- * @param size  Block size in bytes
- * @return      Number of matching bytes
- */
-static size_t count_matching_bytes(const uint8_t *a, const uint8_t *b, size_t size) {
-    if (g_fsd_simd.count_matches) {
-        return g_fsd_simd.count_matches(a, b, size);
-    }
-
-    /* Scalar fallback */
-    size_t count = 0;
-    for (size_t i = 0; i < size; i++) {
-        if (a[i] == b[i]) {
-            count++;
-        }
-    }
-    return count;
-}
-
 fsd_error_t fsd_partial_stage_create(fsd_partial_stage_t **stage_out,
                                      size_t block_size,
-                                     float threshold) {
+                                     float threshold,
+                                     int search_radius_blocks) {
     if (!stage_out || block_size == 0) {
         return FSD_ERR_INVALID_ARG;
     }
@@ -67,6 +51,10 @@ fsd_error_t fsd_partial_stage_create(fsd_partial_stage_t **stage_out,
 
     stage->block_size = block_size;
     stage->threshold = (threshold > 0.0f && threshold < 1.0f) ? threshold : 0.5f;
+    if (search_radius_blocks <= 0) {
+        search_radius_blocks = DEFAULT_SEARCH_RADIUS_BLOCKS;
+    }
+    stage->search_range = (size_t)search_radius_blocks * block_size;
     stage->src_blocks = 0;
     stage->src_size = 0;
 
@@ -93,50 +81,6 @@ fsd_error_t fsd_partial_stage_build_index(fsd_partial_stage_t *stage,
     return FSD_SUCCESS;
 }
 
-/**
- * Search for best matching source position within an offset range.
- *
- * @param src              Source data
- * @param src_size         Source data size
- * @param dest_block       Destination block to match
- * @param block_size       Block size
- * @param center_pos       Center byte position to search around
- * @param min_offset       Minimum offset from center (can be negative)
- * @param max_offset       Maximum offset from center
- * @param threshold_count  Minimum matching bytes required
- * @param best_count_out   Output: best match count found
- * @return                 Best offset found, or -1 if no match above threshold
- */
-static int64_t find_best_match(const uint8_t *src, size_t src_size,
-                                const uint8_t *dest_block, size_t block_size,
-                                int64_t center_pos, int64_t min_offset, int64_t max_offset,
-                                size_t threshold_count, size_t *best_count_out) {
-    int64_t best_offset = -1;
-    /* Initialize to threshold-1 so matches at exactly threshold are accepted */
-    size_t best_count = (threshold_count > 0) ? threshold_count - 1 : 0;
-
-    for (int64_t offset = min_offset; offset <= max_offset; offset++) {
-        int64_t src_pos = center_pos + offset;
-
-        /* Bounds check */
-        if (src_pos < 0 || (size_t)(src_pos + block_size) > src_size) {
-            continue;
-        }
-
-        size_t match_count = count_matching_bytes(src + src_pos, dest_block, block_size);
-
-        if (match_count > best_count) {
-            best_count = match_count;
-            best_offset = offset;
-        }
-    }
-
-    if (best_count_out) {
-        *best_count_out = best_count;
-    }
-    return best_offset;
-}
-
 fsd_error_t fsd_partial_stage_run(fsd_partial_stage_t *stage,
                                   fsd_block_tracker_t *tracker,
                                   const uint8_t *src,
@@ -150,6 +94,26 @@ fsd_error_t fsd_partial_stage_run(fsd_partial_stage_t *stage,
     size_t threshold_count = (size_t)(stage->threshold * block_size);
     size_t src_size = stage->src_size;
 
+    /* Require at least one matching byte. A threshold small enough to truncate
+     * to zero here (e.g. 0.0001 * 4096) would otherwise make the "best_count >=
+     * threshold_count" test below pass as 0 >= 0 even when the block search found
+     * no in-bounds candidate and returned its -1 sentinel offset, which would
+     * then be dereferenced as src_pos = dest_pos - 1 (out-of-bounds read). */
+    if (threshold_count == 0) {
+        threshold_count = 1;
+    }
+
+    int64_t search_range = (int64_t)stage->search_range;
+    fsd_count_matches_fn count_fn = fsd_block_search_count_fn();
+
+    /* Quick-accept bar for the pre-sweep probes: stricter than the sweep
+     * threshold so we only skip the sweep for matches good enough that a
+     * marginally better offset elsewhere could not change the outcome much. */
+    size_t quick_accept = (block_size * 9 + 9) / 10;
+    if (quick_accept < threshold_count) {
+        quick_accept = threshold_count;
+    }
+
     uint64_t unmatched_total = fsd_block_tracker_unmatched_count(tracker);
     uint64_t unmatched_processed = 0;
     uint64_t matches_found = 0;
@@ -158,7 +122,7 @@ fsd_error_t fsd_partial_stage_run(fsd_partial_stage_t *stage,
     if (stage->verbose) {
         fprintf(stderr, "[Partial] Processing %lu unmatched blocks (threshold: %zu/%zu bytes)\n",
                 (unsigned long)unmatched_total, threshold_count, block_size);
-        fprintf(stderr, "[Partial] Search range: +/-%d bytes\n", SEARCH_RANGE);
+        fprintf(stderr, "[Partial] Search range: +/-%lld bytes\n", (long long)search_range);
     }
 
     /* Track previous block's relocation info */
@@ -201,19 +165,51 @@ fsd_error_t fsd_partial_stage_run(fsd_partial_stage_t *stage,
         const uint8_t *dest_block = dest + (dest_idx * block_size);
         int64_t dest_pos = dest_idx * block_size;
 
-        /* Stage 1: Search around current position */
+        /* Stage 0: Probe the two most likely positions with one exact count
+         * each before any sweep: the continuation of the previous block's
+         * match (runs of blocks shifted by a constant offset re-enter here
+         * whenever the run was interrupted by e.g. a zero or identity block),
+         * and the block's own position (in-place modification). Accepting at
+         * the stricter quick_accept bar skips the sweep for the common cases. */
         size_t best_count = 0;
-        int64_t best_offset = find_best_match(src, src_size, dest_block, block_size,
-                                               dest_pos, -SEARCH_RANGE, SEARCH_RANGE,
-                                               threshold_count, &best_count);
+        int64_t best_offset = -1;
+        bool quick_matched = false;
+        {
+            int64_t probes[2];
+            int probe_count = 0;
+            if (prev_was_relocated) {
+                probes[probe_count++] = prev_src_pos + (int64_t)block_size;
+            }
+            probes[probe_count++] = dest_pos;
+
+            for (int q = 0; q < probe_count && !quick_matched; q++) {
+                int64_t pos = probes[q];
+                if (pos < 0 || (size_t)(pos + block_size) > src_size) {
+                    continue;
+                }
+                size_t c = count_fn(src + pos, dest_block, block_size);
+                if (c >= quick_accept) {
+                    best_count = c;
+                    best_offset = pos - dest_pos;
+                    quick_matched = true;
+                }
+            }
+        }
+
+        /* Stage 1: Search around current position */
+        if (!quick_matched) {
+            best_offset = fsd_block_search_best(src, src_size, dest_block, block_size,
+                                          dest_pos, -search_range, search_range,
+                                          threshold_count, count_fn, &best_count);
+        }
 
         /* Stage 2: If no match and previous was relocated, search relative to that */
         if (best_count < threshold_count && prev_was_relocated) {
             int64_t reloc_base = prev_src_pos + block_size;
             size_t reloc_count = 0;
-            int64_t reloc_offset = find_best_match(src, src_size, dest_block, block_size,
-                                                    reloc_base, 0, SEARCH_RANGE,
-                                                    threshold_count, &reloc_count);
+            int64_t reloc_offset = fsd_block_search_best(src, src_size, dest_block, block_size,
+                                                    reloc_base, 0, search_range,
+                                                    threshold_count, count_fn, &reloc_count);
             if (reloc_count >= threshold_count && reloc_count > best_count) {
                 best_offset = (reloc_base + reloc_offset) - dest_pos;
                 best_count = reloc_count;
@@ -223,6 +219,15 @@ fsd_error_t fsd_partial_stage_run(fsd_partial_stage_t *stage,
         if (best_count >= threshold_count) {
             /* Found a match */
             int64_t src_pos = dest_pos + best_offset;
+
+            /* Defensive: never read outside the source buffer. fsd_block_search_best
+             * only selects offsets that passed its own bounds check, so this
+             * should always hold; the guard keeps the delta read below memory-
+             * safe even if the search logic changes. */
+            if (src_pos < 0 || (size_t)(src_pos + block_size) > src_size) {
+                continue;
+            }
+
             uint64_t src_block_idx = src_pos / block_size;
             int64_t byte_offset = src_pos % block_size;
 
@@ -254,7 +259,7 @@ fsd_error_t fsd_partial_stage_run(fsd_partial_stage_t *stage,
                     const uint8_t *ext_dest_block = dest + (ext_idx * block_size);
                     const uint8_t *ext_src_block = src + ext_src_pos;
 
-                    size_t ext_count = count_matching_bytes(ext_src_block, ext_dest_block, block_size);
+                    size_t ext_count = count_fn(ext_src_block, ext_dest_block, block_size);
                     if (ext_count < threshold_count) {
                         break;
                     }

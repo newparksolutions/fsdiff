@@ -11,6 +11,18 @@
 #include "stage_controller.h"
 #include <stdlib.h>
 
+/* True if the operation has been cancelled, via either the controller's own
+ * flag or an external flag supplied by fsd_stage_controller_set_cancel_flag. */
+static int controller_cancelled(const fsd_stage_controller_t *ctrl) {
+    if (fsd_atomic_load(ctrl->cancelled)) {
+        return 1;
+    }
+    if (ctrl->ext_cancel && fsd_atomic_load(*ctrl->ext_cancel)) {
+        return 1;
+    }
+    return 0;
+}
+
 fsd_error_t fsd_stage_controller_create(fsd_stage_controller_t **ctrl_out,
                                         const fsd_diff_options_t *opts,
                                         uint64_t src_blocks,
@@ -29,11 +41,13 @@ fsd_error_t fsd_stage_controller_create(fsd_stage_controller_t **ctrl_out,
         ctrl->block_size = 1ULL << opts->block_size_log2;
         ctrl->enable_identity = opts->enable_identity;
         ctrl->enable_relocation = opts->enable_relocation;
+        ctrl->enable_fsmap = opts->enable_fsmap;
         ctrl->enable_partial = opts->enable_partial;
     } else {
         ctrl->block_size = FSD_DEFAULT_BLOCK_SIZE;
         ctrl->enable_identity = true;
         ctrl->enable_relocation = true;
+        ctrl->enable_fsmap = true;
         ctrl->enable_partial = true;
     }
 
@@ -76,9 +90,10 @@ fsd_error_t fsd_stage_controller_create(fsd_stage_controller_t **ctrl_out,
         }
     }
 
-    if (ctrl->enable_partial) {
-        err = fsd_partial_stage_create(&ctrl->partial, ctrl->block_size,
-                                       opts ? opts->partial_threshold : 0.5f);
+    if (ctrl->enable_fsmap) {
+        err = fsd_fsmap_stage_create(&ctrl->fsmap, ctrl->block_size,
+                                     opts ? opts->partial_threshold : 0.5f,
+                                     opts ? opts->search_radius : 0);
         if (err != FSD_SUCCESS) {
             fsd_relocation_stage_destroy(ctrl->relocation);
             fsd_identity_stage_destroy(ctrl->identity);
@@ -89,7 +104,23 @@ fsd_error_t fsd_stage_controller_create(fsd_stage_controller_t **ctrl_out,
         }
     }
 
+    if (ctrl->enable_partial) {
+        err = fsd_partial_stage_create(&ctrl->partial, ctrl->block_size,
+                                       opts ? opts->partial_threshold : 0.5f,
+                                       opts ? opts->search_radius : 0);
+        if (err != FSD_SUCCESS) {
+            fsd_fsmap_stage_destroy(ctrl->fsmap);
+            fsd_relocation_stage_destroy(ctrl->relocation);
+            fsd_identity_stage_destroy(ctrl->identity);
+            fsd_pool_destroy(ctrl->pool);
+            fsd_block_tracker_destroy(ctrl->tracker);
+            free(ctrl);
+            return err;
+        }
+    }
+
     ctrl->cancelled = 0;
+    ctrl->ext_cancel = NULL;
     ctrl->progress_cb = NULL;
     ctrl->progress_user_data = NULL;
 
@@ -116,7 +147,7 @@ fsd_error_t fsd_stage_controller_run(fsd_stage_controller_t *ctrl,
      * Compare blocks at same positions, also detect zero/one blocks
      */
     if (ctrl->enable_identity && ctrl->identity) {
-        if (fsd_atomic_load(ctrl->cancelled)) return FSD_ERR_CANCELLED;
+        if (controller_cancelled(ctrl)) return FSD_ERR_CANCELLED;
 
         err = fsd_identity_stage_run(ctrl->identity,
                                      ctrl->tracker,
@@ -139,7 +170,7 @@ fsd_error_t fsd_stage_controller_run(fsd_stage_controller_t *ctrl,
      * Build hash table of source blocks, look up unmatched dest blocks
      */
     if (ctrl->enable_relocation && ctrl->relocation) {
-        if (fsd_atomic_load(ctrl->cancelled)) return FSD_ERR_CANCELLED;
+        if (controller_cancelled(ctrl)) return FSD_ERR_CANCELLED;
 
         /* Build source block index */
         err = fsd_relocation_stage_build_index(ctrl->relocation, src_data);
@@ -161,11 +192,45 @@ fsd_error_t fsd_stage_controller_run(fsd_stage_controller_t *ctrl,
     }
 
     /*
+     * Stage 2b: Filesystem-aware matching
+     * If both images are supported ext filesystems, map unmatched dest
+     * blocks to (path, file offset) and verify the same-path/same-offset
+     * source position. Self-deactivates on unsupported images.
+     */
+    if (ctrl->enable_fsmap && ctrl->fsmap) {
+        if (controller_cancelled(ctrl)) return FSD_ERR_CANCELLED;
+
+        fsd_fsmap_stage_set_cancel(ctrl->fsmap,
+                                   ctrl->ext_cancel ? ctrl->ext_cancel
+                                                    : &ctrl->cancelled);
+
+        err = fsd_fsmap_stage_build_index(ctrl->fsmap,
+                                          src_data, src_size,
+                                          dest_data, dest_size,
+                                          ctrl->tracker);
+        if (err != FSD_SUCCESS) return err;
+
+        err = fsd_fsmap_stage_run(ctrl->fsmap,
+                                  ctrl->tracker,
+                                  src_data,
+                                  dest_data,
+                                  ctrl->pool);
+        if (err != FSD_SUCCESS) return err;
+
+        /* Report progress */
+        if (ctrl->progress_cb) {
+            ctrl->progress_cb(ctrl->progress_user_data,
+                              dest_blocks - fsd_block_tracker_unmatched_count(ctrl->tracker),
+                              dest_blocks);
+        }
+    }
+
+    /*
      * Stage 3: Partial matching (local search)
      * Find approximate matches for remaining unmatched blocks
      */
     if (ctrl->enable_partial && ctrl->partial) {
-        if (fsd_atomic_load(ctrl->cancelled)) return FSD_ERR_CANCELLED;
+        if (controller_cancelled(ctrl)) return FSD_ERR_CANCELLED;
 
         /* Build source index */
         err = fsd_partial_stage_build_index(ctrl->partial,
@@ -218,6 +283,13 @@ void fsd_stage_controller_cancel(fsd_stage_controller_t *ctrl) {
     }
 }
 
+void fsd_stage_controller_set_cancel_flag(fsd_stage_controller_t *ctrl,
+                                          const FSD_ATOMIC int *flag) {
+    if (ctrl) {
+        ctrl->ext_cancel = flag;
+    }
+}
+
 void fsd_stage_controller_set_verbose_identity(fsd_stage_controller_t *ctrl, int verbose) {
     if (ctrl) {
         ctrl->verbose_identity = verbose;
@@ -236,6 +308,15 @@ void fsd_stage_controller_set_verbose_relocation(fsd_stage_controller_t *ctrl, i
     }
 }
 
+void fsd_stage_controller_set_verbose_fsmap(fsd_stage_controller_t *ctrl, int verbose) {
+    if (ctrl) {
+        ctrl->verbose_fsmap = verbose;
+        if (ctrl->fsmap) {
+            fsd_fsmap_stage_set_verbose(ctrl->fsmap, verbose);
+        }
+    }
+}
+
 void fsd_stage_controller_set_verbose_partial(fsd_stage_controller_t *ctrl, int verbose) {
     if (ctrl) {
         ctrl->verbose_partial = verbose;
@@ -248,6 +329,7 @@ void fsd_stage_controller_set_verbose_partial(fsd_stage_controller_t *ctrl, int 
 void fsd_stage_controller_set_verbose(fsd_stage_controller_t *ctrl, int verbose) {
     fsd_stage_controller_set_verbose_identity(ctrl, verbose);
     fsd_stage_controller_set_verbose_relocation(ctrl, verbose);
+    fsd_stage_controller_set_verbose_fsmap(ctrl, verbose);
     fsd_stage_controller_set_verbose_partial(ctrl, verbose);
 }
 
@@ -255,6 +337,7 @@ void fsd_stage_controller_destroy(fsd_stage_controller_t *ctrl) {
     if (!ctrl) return;
 
     fsd_partial_stage_destroy(ctrl->partial);
+    fsd_fsmap_stage_destroy(ctrl->fsmap);
     fsd_relocation_stage_destroy(ctrl->relocation);
     fsd_identity_stage_destroy(ctrl->identity);
     fsd_block_tracker_destroy(ctrl->tracker);

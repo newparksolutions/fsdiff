@@ -26,14 +26,19 @@ typedef struct fsd_partial_stage fsd_partial_stage_t;
 /**
  * Create partial matching stage.
  *
- * @param stage_out   Output pointer for stage
- * @param block_size  Block size in bytes
- * @param threshold   Match threshold (0.0-1.0, fraction of bytes that must match)
- * @return            FSD_SUCCESS or error code
+ * @param stage_out             Output pointer for stage
+ * @param block_size            Block size in bytes
+ * @param threshold             Match threshold (0.0-1.0, fraction of bytes
+ *                              that must match)
+ * @param search_radius_blocks  Search radius around each block, in blocks
+ *                              (<= 0 selects the default of 8 blocks, i.e.
+ *                              +/-32 KiB at the default 4 KiB block size)
+ * @return                      FSD_SUCCESS or error code
  */
 fsd_error_t fsd_partial_stage_create(fsd_partial_stage_t **stage_out,
                                      size_t block_size,
-                                     float threshold);
+                                     float threshold,
+                                     int search_radius_blocks);
 
 /**
  * Build index from source blocks.

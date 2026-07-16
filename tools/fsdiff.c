@@ -51,6 +51,7 @@ static void print_usage(const char *prog) {
     fprintf(stderr, "  --no-identity             Disable identity matching\n");
     fprintf(stderr, "  --no-relocation           Disable relocation matching\n");
     fprintf(stderr, "  --no-partial              Disable partial matching\n");
+    fprintf(stderr, "  --no-fsmap                Disable filesystem-aware matching\n");
     fprintf(stderr, "  --scalar                  Force scalar (non-SIMD) code path\n");
     fprintf(stderr, "  -v, --verbose             Show progress and statistics\n");
     fprintf(stderr, "  -V, --very-verbose        Detailed output from all matching stages\n");
@@ -96,6 +97,7 @@ static int cmd_create(int argc, char **argv) {
         {"no-identity",     no_argument,       0, 'I'},
         {"no-relocation",   no_argument,       0, 'R'},
         {"no-partial",      no_argument,       0, 'P'},
+        {"no-fsmap",        no_argument,       0, 'F'},
         {"scalar",          no_argument,       0, 'S'},
         {"verbose",         no_argument,       0, 'v'},
         {"very-verbose",    no_argument,       0, 'V'},
@@ -133,6 +135,9 @@ static int cmd_create(int argc, char **argv) {
         case 'P':
             opts.enable_partial = false;
             break;
+        case 'F':
+            opts.enable_fsmap = false;
+            break;
         case 'S':
             opts.force_scalar = true;
             break;
@@ -155,6 +160,16 @@ static int cmd_create(int argc, char **argv) {
         default:
             return 1;
         }
+    }
+
+    /* Relocation matching consumes the per-block CRC32 that the identity stage
+     * computes as a side effect of its comparison (see options.h). Relocation
+     * cannot run without it, so enabling relocation implies identity. */
+    if (opts.enable_relocation && !opts.enable_identity) {
+        if (verbose) {
+            fprintf(stderr, "Note: enabling identity matching (required by relocation)\n");
+        }
+        opts.enable_identity = true;
     }
 
     if (optind + 3 != argc) {

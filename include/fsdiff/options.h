@@ -43,14 +43,37 @@ typedef struct {
     /** Block size as log2 (default: 12 = 4096 bytes) */
     uint8_t block_size_log2;
 
-    /** Enable Stage 1: Identity matching (default: true) */
+    /** Enable Stage 1: Identity matching (default: true).
+     *
+     * The identity stage also computes each destination block's CRC32 as a
+     * side effect of the byte comparison it already performs (sharing the same
+     * read, so it is effectively free). The relocation stage depends on those
+     * CRC32 values. If relocation is enabled, identity MUST also be enabled;
+     * with identity disabled every destination CRC32 is zero and relocation
+     * finds essentially nothing (correct output, but no relocation compression).
+     * The fsdiff CLI enforces this by turning identity on whenever relocation
+     * is requested. */
     bool enable_identity;
 
-    /** Enable Stage 2: Relocation matching via CRC32 (default: true) */
+    /** Enable Stage 2: Relocation matching via CRC32 (default: true).
+     *
+     * Requires enable_identity == true: the per-block CRC32 that relocation
+     * matches against is produced only by the identity stage (see above). */
     bool enable_relocation;
 
     /** Enable Stage 3: Local search partial matching (default: true) */
     bool enable_partial;
+
+    /** Enable filesystem-aware matching between the relocation and partial
+     * stages (default: true).
+     *
+     * When both images are clean ext2/3/4 filesystems (bare filesystem
+     * images, not partitioned disks), unmatched destination blocks are
+     * mapped to (file path, file offset) and matched against the same path
+     * and offset in the source filesystem. The stage silently deactivates
+     * when either image is not a supported filesystem, so leaving it
+     * enabled is free for non-filesystem inputs. */
+    bool enable_fsmap;
 
     /** Match threshold for partial matching (0.0-1.0, default: 0.5) */
     float partial_threshold;
