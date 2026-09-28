@@ -95,8 +95,11 @@ static int test_probe_rejections(void) {
     /* Dirty journal */
     make_valid_superblock(img);
     put32(img + 1024 + 0x60, 0x0002 | 0x0004);    /* RECOVER */
+    reason = NULL;
     TEST_ASSERT(fsd_extfs_open(&fs, img, IMG_SIZE, &reason) ==
                     FSD_ERR_BAD_MAGIC, "dirty journal rejected");
+    TEST_ASSERT(reason && strstr(reason, "recovery"),
+                "dirty journal gives the specific reason");
 
     /* Not cleanly unmounted */
     make_valid_superblock(img);
@@ -181,15 +184,17 @@ static int fixture_cb(void *user, const char *path, uint64_t ino,
     return 0;
 }
 
-static int test_mkfs_fixture(void) {
-    if (system("command -v mkfs.ext4 > /dev/null 2>&1") != 0) {
-        printf("  SKIP: mkfs.ext4 not available\n");
+/* mkfs_opts: extra options placed after "<tool> -q -F -b 4096". */
+static int run_mkfs_fixture(const char *tool, const char *mkfs_opts) {
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "command -v %s > /dev/null 2>&1", tool);
+    if (system(cmd) != 0) {
+        printf("  SKIP: %s not available\n", tool);
         return 0;
     }
 
     const char *dir = "test_ext_fixture_tree";
     const char *imgpath = "test_ext_fixture.img";
-    char cmd[512];
 
     /* Build a small tree: text file, nested binary, hard link pair */
     snprintf(cmd, sizeof(cmd),
@@ -204,10 +209,10 @@ static int test_mkfs_fixture(void) {
         return 0;
     }
     snprintf(cmd, sizeof(cmd),
-             "mkfs.ext4 -q -F -b 4096 -d %s %s 8M > /dev/null 2>&1",
-             dir, imgpath);
+             "%s -q -F -b 4096 %s -d %s %s 8M > /dev/null 2>&1",
+             tool, mkfs_opts, dir, imgpath);
     if (system(cmd) != 0) {
-        printf("  SKIP: mkfs.ext4 -d failed\n");
+        printf("  SKIP: %s -d failed\n", tool);
         return 0;
     }
 
@@ -249,6 +254,16 @@ static int test_mkfs_fixture(void) {
     return 0;
 }
 
+static int test_mkfs_fixture(void) {
+    return run_mkfs_fixture("mkfs.ext4", "");
+}
+
+/* Old-style ext2 without INCOMPAT_FILETYPE: dirents have no type byte and a
+ * 16-bit name_len, so classification must come from the inode mode. */
+static int test_mkfs_fixture_no_filetype(void) {
+    return run_mkfs_fixture("mkfs.ext2", "-O ^filetype");
+}
+
 int main(void) {
     int failures = 0;
 
@@ -259,6 +274,8 @@ int main(void) {
     failures += test_walk_garbage_metadata();
     printf("  mkfs fixture...\n");
     failures += test_mkfs_fixture();
+    printf("  mkfs fixture (ext2, no filetype)...\n");
+    failures += test_mkfs_fixture_no_filetype();
 
     printf(failures ? "FAILED\n" : "OK\n");
     return failures ? 1 : 0;

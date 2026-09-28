@@ -84,11 +84,15 @@ fsd_error_t fsd_fsmap_stage_run(fsd_fsmap_stage_t *stage,
                                 fsd_memory_pool_t *delta_pool);
 
 /**
- * Point the stage at an external cancel flag, checked periodically inside
- * run(). Pass NULL to clear. The flag must outlive the run.
+ * Point the stage at up to two external cancel flags, checked periodically
+ * inside run(); the run is cancelled when either is set. The controller
+ * passes its own flag and the caller-supplied one so an in-stage check sees
+ * the same requests as the between-stage check. Either may be NULL. The
+ * flags must outlive the run.
  */
 void fsd_fsmap_stage_set_cancel(fsd_fsmap_stage_t *stage,
-                                const FSD_ATOMIC int *flag);
+                                const FSD_ATOMIC int *flag,
+                                const FSD_ATOMIC int *flag2);
 
 /** Enable verbose output (1 to enable, 0 to disable). */
 void fsd_fsmap_stage_set_verbose(fsd_fsmap_stage_t *stage, int verbose);

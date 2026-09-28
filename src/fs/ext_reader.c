@@ -122,6 +122,7 @@ static uint32_t rd32(const uint8_t *p) {
 #define DE_NAME_LEN_OFF        6
 #define DE_FILE_TYPE_OFF       7
 #define DE_NAME_OFF            8
+#define DE_FT_UNKNOWN          0
 #define DE_FT_REGULAR          1
 #define DE_FT_DIRECTORY        2
 
@@ -151,6 +152,7 @@ struct fsd_extfs {
     uint32_t first_data_block;
     uint64_t gdt_start;         /* byte offset of group descriptor table */
     uint32_t group_count;
+    int has_filetype;           /* INCOMPAT_FILETYPE: dirents carry a type byte */
 };
 
 /* Pointer to filesystem block b, or NULL if it lies outside the image. */
@@ -197,12 +199,14 @@ fsd_error_t fsd_extfs_open(fsd_extfs_t **fs_out,
         reason = "unsupported block size";
         goto fail;
     }
-    if (incompat & ~(uint32_t)INCOMPAT_ALLOWED) {
-        reason = "unsupported incompat features";
+    /* RECOVER is not in the whitelist, so test it first to give the
+     * specific reason rather than the generic one. */
+    if (incompat & INCOMPAT_RECOVER) {
+        reason = "journal needs recovery";
         goto fail;
     }
-    if (incompat & INCOMPAT_RECOVER) {   /* covered above, kept for clarity */
-        reason = "journal needs recovery";
+    if (incompat & ~(uint32_t)INCOMPAT_ALLOWED) {
+        reason = "unsupported incompat features";
         goto fail;
     }
     if (!(rd16(sb + SB_STATE) & EXT_STATE_CLEAN)) {
@@ -216,6 +220,7 @@ fsd_error_t fsd_extfs_open(fsd_extfs_t **fs_out,
     }
     fs->image = image;
     fs->image_size = image_size;
+    fs->has_filetype = (incompat & INCOMPAT_FILETYPE) != 0;
     fs->block_size = 1024u << log_bs;
     fs->block_count = rd32(sb + SB_BLOCKS_COUNT_LO);
     if (incompat & INCOMPAT_64BIT) {
@@ -594,10 +599,28 @@ fsd_error_t fsd_extfs_walk(fsd_extfs_t *fs, fsd_extfs_file_cb cb, void *user) {
                         break;      /* corrupt or htree interior block */
                     }
                     uint32_t ino = rd32(de + DE_INODE_OFF);
-                    uint8_t name_len = de[DE_NAME_LEN_OFF];
-                    uint8_t ftype = de[DE_FILE_TYPE_OFF];
+                    uint32_t name_len;
+                    uint8_t ftype;
+                    if (fs->has_filetype) {
+                        name_len = de[DE_NAME_LEN_OFF];
+                        ftype = de[DE_FILE_TYPE_OFF];
+                    } else {
+                        /* Pre-FILETYPE layout: 16-bit name_len, no type byte.
+                         * Classify from the inode's mode instead. */
+                        name_len = rd16(de + DE_NAME_LEN_OFF);
+                        ftype = DE_FT_UNKNOWN;
+                        const uint8_t *ti = inode_ptr(fs, ino);  /* NULL if out of range */
+                        if (ti) {
+                            uint16_t fmt = rd16(ti + INO_MODE) & MODE_FMT_MASK;
+                            if (fmt == MODE_DIRECTORY) {
+                                ftype = DE_FT_DIRECTORY;
+                            } else if (fmt == MODE_REGULAR) {
+                                ftype = DE_FT_REGULAR;
+                            }
+                        }
+                    }
                     if (ino != 0 && name_len > 0 &&
-                        DE_NAME_OFF + (uint32_t)name_len <= rec_len) {
+                        DE_NAME_OFF + name_len <= rec_len) {
                         const char *name = (const char *)(de + DE_NAME_OFF);
                         int is_dot = (name_len == 1 && name[0] == '.') ||
                                      (name_len == 2 && name[0] == '.' &&
@@ -618,6 +641,10 @@ fsd_error_t fsd_extfs_walk(fsd_extfs_t *fs, fsd_extfs_file_cb cb, void *user) {
                                     visited[ino / 8] |=
                                         (uint8_t)(1u << (ino % 8));
                                     if (dir_push(&stack, ino, path_buf) != 0) {
+                                        /* dir was popped above, so the
+                                         * stack cleanup at out: will not
+                                         * free its path. */
+                                        free(dir.path);
                                         goto out;
                                     }
                                 }

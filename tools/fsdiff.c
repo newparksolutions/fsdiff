@@ -20,6 +20,23 @@
 #include <string.h>
 #include <inttypes.h>
 
+/* Parse a byte count with an optional 'k'/'K' suffix (x1024). Returns 0 and
+ * sets *out on success, -1 on malformed input or a zero/negative value. */
+static int parse_size_arg(const char *s, unsigned long long *out) {
+    if (!s || !*s) return -1;
+    char *end = NULL;
+    unsigned long long v = strtoull(s, &end, 10);
+    if (end == s) return -1;
+    if (*end == 'k' || *end == 'K') {
+        if (v > (~0ULL) / 1024) return -1;
+        v *= 1024;
+        end++;
+    }
+    if (*end != '\0' || v == 0) return -1;
+    *out = v;
+    return 0;
+}
+
 static int parse_source_mode(const char *s, fsd_source_mode_t *out) {
     if (strcmp(s, "auto") == 0)   { *out = FSD_SOURCE_AUTO;   return 0; }
     if (strcmp(s, "mmap") == 0)   { *out = FSD_SOURCE_MMAP;   return 0; }
@@ -46,7 +63,9 @@ static void print_usage(const char *prog) {
 #ifndef FSDIFF_PATCH_ONLY
     fprintf(stderr, "Delta options:\n");
     fprintf(stderr, "  -b, --block-size <log2>   Block size as power of 2 (default: 12 = 4096)\n");
-    fprintf(stderr, "  -r, --search-radius <n>   Search radius for partial matching (default: 8)\n");
+    fprintf(stderr, "  -r, --search-radius <n>   Search radius in bytes for partial matching,\n");
+    fprintf(stderr, "                            optional 'k' suffix = KiB; rounded up to whole\n");
+    fprintf(stderr, "                            blocks (default: 8 blocks = 32k at 4096)\n");
     fprintf(stderr, "  -t, --threshold <f>       Partial match threshold 0.0-1.0 (default: 0.5)\n");
     fprintf(stderr, "  --no-identity             Disable identity matching\n");
     fprintf(stderr, "  --no-relocation           Disable relocation matching\n");
@@ -109,6 +128,8 @@ static int cmd_create(int argc, char **argv) {
     fsd_diff_options_t opts;
     fsd_diff_options_init(&opts);
     int verbose = 0;
+    int no_identity_requested = 0;
+    unsigned long long search_radius_bytes = 0;   /* 0 = library default */
 
     int opt;
     while ((opt = getopt_long(argc, argv, "b:r:t:vVh", long_options, NULL)) != -1) {
@@ -121,13 +142,18 @@ static int cmd_create(int argc, char **argv) {
             }
             break;
         case 'r':
-            opts.search_radius = atoi(optarg);
+            if (parse_size_arg(optarg, &search_radius_bytes) < 0) {
+                fprintf(stderr, "Error: search-radius must be a positive byte "
+                                "count, optionally with a 'k' suffix\n");
+                return 1;
+            }
             break;
         case 't':
             opts.partial_threshold = (float)atof(optarg);
             break;
         case 'I':
             opts.enable_identity = false;
+            no_identity_requested = 1;
             break;
         case 'R':
             opts.enable_relocation = false;
@@ -166,10 +192,25 @@ static int cmd_create(int argc, char **argv) {
      * computes as a side effect of its comparison (see options.h). Relocation
      * cannot run without it, so enabling relocation implies identity. */
     if (opts.enable_relocation && !opts.enable_identity) {
-        if (verbose) {
-            fprintf(stderr, "Note: enabling identity matching (required by relocation)\n");
+        if (no_identity_requested) {
+            fprintf(stderr, "Warning: --no-identity ignored; identity matching "
+                            "is required by relocation (use --no-relocation "
+                            "as well to disable it)\n");
         }
         opts.enable_identity = true;
+    }
+
+    /* The library takes the search radius in blocks; the CLI takes bytes.
+     * Convert now that the block size is final, rounding up so the requested
+     * distance is always covered. */
+    if (search_radius_bytes > 0) {
+        unsigned long long bs = 1ULL << opts.block_size_log2;
+        unsigned long long blocks = (search_radius_bytes + bs - 1) / bs;
+        if (blocks > 0x7fffffffULL) {
+            fprintf(stderr, "Error: search-radius too large\n");
+            return 1;
+        }
+        opts.search_radius = (int)blocks;
     }
 
     if (optind + 3 != argc) {

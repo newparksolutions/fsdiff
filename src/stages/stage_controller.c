@@ -31,6 +31,14 @@ fsd_error_t fsd_stage_controller_create(fsd_stage_controller_t **ctrl_out,
         return FSD_ERR_INVALID_ARG;
     }
 
+    /* Relocation matches against the per-block CRC32 that only the identity
+     * stage computes (see options.h). Without identity every CRC32 is zero
+     * and relocation silently finds nothing, so reject the combination
+     * rather than degrade without a diagnostic. */
+    if (opts && opts->enable_relocation && !opts->enable_identity) {
+        return FSD_ERR_INVALID_ARG;
+    }
+
     fsd_stage_controller_t *ctrl = calloc(1, sizeof(fsd_stage_controller_t));
     if (!ctrl) {
         return FSD_ERR_OUT_OF_MEMORY;
@@ -200,9 +208,8 @@ fsd_error_t fsd_stage_controller_run(fsd_stage_controller_t *ctrl,
     if (ctrl->enable_fsmap && ctrl->fsmap) {
         if (controller_cancelled(ctrl)) return FSD_ERR_CANCELLED;
 
-        fsd_fsmap_stage_set_cancel(ctrl->fsmap,
-                                   ctrl->ext_cancel ? ctrl->ext_cancel
-                                                    : &ctrl->cancelled);
+        fsd_fsmap_stage_set_cancel(ctrl->fsmap, &ctrl->cancelled,
+                                   ctrl->ext_cancel);
 
         err = fsd_fsmap_stage_build_index(ctrl->fsmap,
                                           src_data, src_size,

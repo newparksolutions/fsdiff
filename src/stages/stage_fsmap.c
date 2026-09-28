@@ -40,7 +40,8 @@ struct fsd_fsmap_stage {
     size_t search_range;            /* bytes */
     int verbose;
     int inactive;                   /* probe failed: run() no-ops */
-    const FSD_ATOMIC int *cancel;
+    const FSD_ATOMIC int *cancel;   /* either may be NULL; both are checked */
+    const FSD_ATOMIC int *cancel2;
 
     fsd_memory_pool_t *pool;        /* owns paths, extent copies, file table */
     fsd_hash_table_t *path_hash;    /* crc32(path) -> src_files index */
@@ -91,8 +92,24 @@ void fsd_fsmap_stage_destroy(fsd_fsmap_stage_t *stage) {
 }
 
 void fsd_fsmap_stage_set_cancel(fsd_fsmap_stage_t *stage,
-                                const FSD_ATOMIC int *flag) {
-    if (stage) stage->cancel = flag;
+                                const FSD_ATOMIC int *flag,
+                                const FSD_ATOMIC int *flag2) {
+    if (stage) {
+        stage->cancel = flag;
+        stage->cancel2 = flag2;
+    }
+}
+
+/* True when either cancel flag is set (mirrors the stage controller's
+ * between-stage check, which consults its own flag and the external one). */
+static int fsmap_cancelled(const fsd_fsmap_stage_t *stage) {
+    if (stage->cancel && fsd_atomic_load(*stage->cancel)) {
+        return 1;
+    }
+    if (stage->cancel2 && fsd_atomic_load(*stage->cancel2)) {
+        return 1;
+    }
+    return 0;
 }
 
 void fsd_fsmap_stage_set_verbose(fsd_fsmap_stage_t *stage, int verbose) {
@@ -394,8 +411,7 @@ fsd_error_t fsd_fsmap_stage_run(fsd_fsmap_stage_t *stage,
     uint64_t exact_hits = 0, sweep_hits = 0, misses = 0, already = 0;
 
     for (size_t h = 0; h < stage->n_hyps; h++) {
-        if (stage->cancel && (h % CANCEL_CHECK_INTERVAL) == 0 &&
-            fsd_atomic_load(*stage->cancel)) {
+        if ((h % CANCEL_CHECK_INTERVAL) == 0 && fsmap_cancelled(stage)) {
             return FSD_ERR_CANCELLED;
         }
 
@@ -407,15 +423,22 @@ fsd_error_t fsd_fsmap_stage_run(fsd_fsmap_stage_t *stage,
         const uint8_t *dest_block = dest + dest_idx * bs;
         int64_t hyp_pos = (int64_t)stage->hyps[h].src_pos;
 
-        /* Exact hypothesis first (the common case: same file offset) */
+        /* Exact hypothesis first (the common case: same file offset). Only a
+         * byte-for-byte match short-circuits the sweep: anything less could
+         * be a coincidental near-miss that a nearby offset beats outright,
+         * and accepting it here would lock in a worse partial match than
+         * the partial stage's full sweep would have found. (A full match at
+         * the same offset should normally have been taken by the relocation
+         * stage already, but this stage cannot rely on that.) */
         size_t best_count = count_fn(src + hyp_pos, dest_block, bs);
         int64_t src_pos = hyp_pos;
         int is_exact = 1;
 
-        if (best_count < threshold_count) {
+        if (best_count < bs) {
             /* Directed sweep around the hypothesis (file content shifted
-             * internally, e.g. an insertion earlier in the file) */
-            is_exact = 0;
+             * internally, e.g. an insertion earlier in the file). The sweep
+             * covers offset 0 too, but its prescreen may skip it, so the
+             * exact count computed above remains the floor. */
             size_t sweep_count = 0;
             int64_t off = fsd_block_search_best(src, stage->src_size,
                                                 dest_block, bs, hyp_pos,
@@ -423,13 +446,15 @@ fsd_error_t fsd_fsmap_stage_run(fsd_fsmap_stage_t *stage,
                                                 (int64_t)stage->search_range,
                                                 threshold_count, count_fn,
                                                 &sweep_count);
-            if (sweep_count < threshold_count) {
-                misses++;
-                continue;
+            if (sweep_count > best_count && off != 0) {
+                int64_t cand = hyp_pos + off;
+                if (cand >= 0 && (size_t)cand + bs <= stage->src_size) {
+                    src_pos = cand;
+                    best_count = sweep_count;
+                    is_exact = 0;
+                }
             }
-            src_pos = hyp_pos + off;
-            best_count = sweep_count;
-            if (src_pos < 0 || (size_t)src_pos + bs > stage->src_size) {
+            if (best_count < threshold_count) {
                 misses++;
                 continue;
             }

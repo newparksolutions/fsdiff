@@ -185,8 +185,10 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
     clock_t start_time = clock();
     fsd_error_t err;
 
-    /* Clear any cancel request left over from a previous run on this context. */
-    fsd_atomic_store(ctx->cancelled, 0);
+    /* Note: ctx->cancelled is deliberately not cleared here. It is zeroed in
+     * fsd_diff_create and again on the cancelled return path below, so a
+     * cancel that races with the start of a run is honoured rather than
+     * discarded. */
 
     /* Honor the force-scalar option. The SIMD dispatch table is process-
      * global (set up by fsd_init), so this affects subsequent operations
@@ -271,6 +273,11 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
         fsd_stage_controller_destroy(controller);
         fsd_mmap_close(dest_reader);
         fsd_source_reader_close(src_reader);
+        if (err == FSD_ERR_CANCELLED) {
+            /* The request has been honoured; reset so the context can be
+             * reused for another run. */
+            fsd_atomic_store(ctx->cancelled, 0);
+        }
         return err;
     }
 

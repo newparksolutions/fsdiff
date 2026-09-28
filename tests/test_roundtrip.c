@@ -320,6 +320,44 @@ static int test_relocated_blocks(void) {
     return 0;
 }
 
+/* Relocation depends on the CRC32s the identity stage computes, so the
+ * library must reject relocation-without-identity instead of silently
+ * producing a patch with no relocations. */
+static int test_relocation_requires_identity(void) {
+    printf("  Testing relocation-without-identity rejection...\n");
+
+    size_t size = 4096 * 2;
+    uint8_t *data = calloc(1, size);
+    TEST_ASSERT(data, "alloc");
+    create_file(src_file, data, size);
+    create_file(dest_file, data, size);
+    free(data);
+
+    fsd_diff_options_t opts;
+    fsd_diff_options_init(&opts);
+    opts.enable_identity = false;
+    opts.enable_relocation = true;
+
+    fsd_diff_ctx_t *diff_ctx = NULL;
+    TEST_ASSERT(fsd_diff_create(&diff_ctx, &opts) == FSD_SUCCESS,
+                "context creation succeeds");
+    fsd_error_t err = fsd_diff_files(diff_ctx, src_file, dest_file, patch_file);
+    TEST_ASSERT(err == FSD_ERR_INVALID_ARG,
+                "relocation without identity is rejected");
+    fsd_diff_destroy(diff_ctx);
+
+    /* Disabling both is fine */
+    opts.enable_relocation = false;
+    TEST_ASSERT(fsd_diff_create(&diff_ctx, &opts) == FSD_SUCCESS,
+                "context creation succeeds");
+    err = fsd_diff_files(diff_ctx, src_file, dest_file, patch_file);
+    TEST_ASSERT(err == FSD_SUCCESS, "identity and relocation both off is accepted");
+    fsd_diff_destroy(diff_ctx);
+
+    cleanup();
+    return 0;
+}
+
 /* Diff+apply helper for the fsmap test: returns patch size, or -1 on any
  * failure (asserts are in the caller for clearer messages). */
 static long diff_apply_size(const char *src, const char *dest,
@@ -436,6 +474,7 @@ int main(void) {
     failures += test_zero_blocks();
     failures += test_one_blocks();
     failures += test_relocated_blocks();
+    failures += test_relocation_requires_identity();
     failures += test_fsmap_ext4_pair();
 
     fsd_cleanup();
