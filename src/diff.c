@@ -100,6 +100,30 @@ static void fsd_write_match_log(const char *path,
     fclose(f);
 }
 
+/**
+ * Copy a temp stream into the patch file, verifying that exactly `expected`
+ * bytes come back. The length check catches a temp file that ended up shorter
+ * than the size recorded in the header (e.g. a write lost to ENOSPC); ferror
+ * distinguishes a read error from a clean EOF.
+ */
+static fsd_error_t fsd_copy_stream(FILE *src, FILE *dst, size_t expected) {
+    uint8_t copy_buf[65536];
+    size_t copied = 0;
+    size_t n;
+
+    rewind(src);
+    while ((n = fread(copy_buf, 1, sizeof(copy_buf), src)) > 0) {
+        if (fwrite(copy_buf, 1, n, dst) != n) {
+            return FSD_ERR_IO;
+        }
+        copied += n;
+    }
+    if (ferror(src) || copied != expected) {
+        return FSD_ERR_IO;
+    }
+    return FSD_SUCCESS;
+}
+
 void fsd_diff_options_init(fsd_diff_options_t *opts) {
     if (!opts) return;
 
@@ -303,6 +327,10 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
     fsd_buffered_writer_t *diff_writer = NULL;
     fsd_buffered_writer_t *lit_writer = NULL;
 
+    /* Set once the output file has been created, so cleanup can remove a
+     * partial patch on error (never for special files; see platform.h). */
+    int unlink_output_on_error = 0;
+
     fsd_writer_create_from_file(&op_writer, op_file, 0);
     fsd_writer_create_from_file(&diff_writer, diff_file, 0);
     fsd_writer_create_from_file(&lit_writer, lit_file, 0);
@@ -315,75 +343,49 @@ fsd_error_t fsd_diff_files(fsd_diff_ctx_t *ctx,
     err = fsd_op_encoder_encode(encoder, tracker, op_writer, diff_writer, lit_writer, dest_data);
     if (err != FSD_SUCCESS) goto cleanup;
 
-    /* Flush writers. A flush failure (e.g. ENOSPC on the temp stream) means the
-     * temp files are incomplete, so the stream lengths we are about to bake into
-     * the header would not match their contents — treat it as a hard error
-     * rather than emitting a structurally corrupt patch. */
+    /* Flush writers, then the stdio buffers beneath them. A flush failure
+     * (e.g. ENOSPC on the temp stream) means the temp files are incomplete, so
+     * the stream lengths we are about to bake into the header would not match
+     * their contents — treat it as a hard error rather than emitting a
+     * structurally corrupt patch. The fflush is needed because
+     * fsd_writer_flush only hands data to stdio; without it the final buffer
+     * would be written by rewind(), which cannot report failure. */
     err = fsd_writer_flush(op_writer);
     if (err != FSD_SUCCESS) goto cleanup;
     err = fsd_writer_flush(diff_writer);
     if (err != FSD_SUCCESS) goto cleanup;
     err = fsd_writer_flush(lit_writer);
     if (err != FSD_SUCCESS) goto cleanup;
+    if (fflush(op_file) != 0 || fflush(diff_file) != 0 || fflush(lit_file) != 0) {
+        err = FSD_ERR_IO;
+        goto cleanup;
+    }
 
     size_t op_size = fsd_writer_bytes_written(op_writer);
     size_t diff_size = fsd_writer_bytes_written(diff_writer);
     size_t lit_size = fsd_writer_bytes_written(lit_writer);
 
     /* Write final output file */
+    int may_unlink_output = fsd_path_is_regular_or_missing(output_path);
     FILE *output = fopen(output_path, "wb");
     if (!output) {
         err = FSD_ERR_IO;
         goto cleanup;
     }
+    unlink_output_on_error = may_unlink_output;
 
-    /* Write header */
+    /* Write header, then the three streams */
     err = fsd_header_write(output, dest_blocks, ctx->opts.block_size_log2, op_size, diff_size);
-    if (err != FSD_SUCCESS) {
-        fclose(output);
-        goto cleanup;
-    }
-
-    /* Copy streams to output */
-    uint8_t copy_buf[65536];
-    size_t n;
-
-    /* Copy operation stream */
-    rewind(op_file);
-    while ((n = fread(copy_buf, 1, sizeof(copy_buf), op_file)) > 0) {
-        if (fwrite(copy_buf, 1, n, output) != n) {
-            err = FSD_ERR_IO;
-            fclose(output);
-            goto cleanup;
-        }
-    }
-
-    /* Copy diff stream */
-    rewind(diff_file);
-    while ((n = fread(copy_buf, 1, sizeof(copy_buf), diff_file)) > 0) {
-        if (fwrite(copy_buf, 1, n, output) != n) {
-            err = FSD_ERR_IO;
-            fclose(output);
-            goto cleanup;
-        }
-    }
-
-    /* Copy literal stream */
-    rewind(lit_file);
-    while ((n = fread(copy_buf, 1, sizeof(copy_buf), lit_file)) > 0) {
-        if (fwrite(copy_buf, 1, n, output) != n) {
-            err = FSD_ERR_IO;
-            fclose(output);
-            goto cleanup;
-        }
-    }
+    if (err == FSD_SUCCESS) err = fsd_copy_stream(op_file, output, op_size);
+    if (err == FSD_SUCCESS) err = fsd_copy_stream(diff_file, output, diff_size);
+    if (err == FSD_SUCCESS) err = fsd_copy_stream(lit_file, output, lit_size);
 
     /* Check fclose: buffered writes to the patch file are flushed here, so a
      * full disk surfaces as an fclose failure rather than a prior fwrite one. */
-    if (fclose(output) != 0) {
+    if (fclose(output) != 0 && err == FSD_SUCCESS) {
         err = FSD_ERR_IO;
-        goto cleanup;
     }
+    if (err != FSD_SUCCESS) goto cleanup;
 
     /* Update statistics */
     ctx->stats.total_blocks = dest_blocks;
@@ -408,6 +410,9 @@ cleanup:
     fsd_unlink(op_tmp);
     fsd_unlink(diff_tmp);
     fsd_unlink(lit_tmp);
+    if (err != FSD_SUCCESS && unlink_output_on_error) {
+        fsd_unlink(output_path);
+    }
     fsd_stage_controller_destroy(controller);
     fsd_mmap_close(dest_reader);
     fsd_source_reader_close(src_reader);
