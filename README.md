@@ -18,10 +18,12 @@ fsdiff gives good performance on large filesystem images which contain executabl
 
 |Test case|Original uncompressed|fsdiff uncompressed|fsdiff and xz -9|rdiff uncompressed|rdiff and xz -9|xdelta|
 |---------|---------------------|-------------------|----------------|------------------|---------------|------|
-|Raspberry Pi OS Full 2025-12-04 vs 2025-11-24|9208 MiB|737 MiB|**200 MiB**|1161 MiB|292 MiB|N/A|
-|Debian Cloud Generic AMD64 20260129-2372 vs 20260112-2355|3072 MiB|78 MiB|**17 MiB**|210 MiB|43 MiB|388 MiB|
+|Raspberry Pi OS Full 2025-12-04 vs 2025-11-24, root partition|8688 MiB|473 MiB|**115 MiB**|1143 MiB|278 MiB|N/A|
+|Debian Cloud Generic AMD64 20260129-2372 vs 20260112-2355, root partition|2943 MiB|55 MiB|**8 MiB**|193 MiB|28 MiB|301 MiB|
 
-It is not possible to evaluate xdelta performance on some images because xdelta does not support files of 4 GiB or more.  bsdiff has not been included because, while it has excellent performance on single binaries, its memory requirements make it unsuitable for use on multi-gigabyte images.
+The test inputs are the ext4 root partitions extracted from the published disk images, not the whole images.  fsdiff's filesystem-aware matching stage needs a bare filesystem, so it does not engage on a partitioned disk image; on the whole images the same builds give 200 MiB (Raspberry Pi OS) and 19 MiB (Debian) after xz -9.  Both patches were applied and the output verified byte-for-byte against the destination.
+
+It is not possible to evaluate xdelta performance on some images because xdelta does not support files of 4 GiB or more.  On the Debian pair xdelta 1.1.3 reported that it found no matches in the source, so its output is effectively the compressed destination.  bsdiff has not been included because, while it has excellent performance on single binaries, its memory requirements make it unsuitable for use on multi-gigabyte images.
 
  - rdiff version 2.3.4
  - xz version 5.6.1+really5.4.5-1ubuntu0.2
