@@ -20,6 +20,7 @@
 #include <string.h>
 #include <inttypes.h>
 
+#ifndef FSDIFF_PATCH_ONLY
 /* Parse a byte count with an optional 'k'/'K' suffix (x1024). Returns 0 and
  * sets *out on success, -1 on malformed input or a zero/negative value. */
 static int parse_size_arg(const char *s, unsigned long long *out) {
@@ -36,6 +37,7 @@ static int parse_size_arg(const char *s, unsigned long long *out) {
     *out = v;
     return 0;
 }
+#endif
 
 static int parse_source_mode(const char *s, fsd_source_mode_t *out) {
     if (strcmp(s, "auto") == 0)   { *out = FSD_SOURCE_AUTO;   return 0; }
