@@ -463,8 +463,11 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
                         err = read_varint(&diff_cursor, diff_region_end, &add_len);
                         if (err != FSD_SUCCESS) goto error;
 
-                        /* Apply diff values - must consume all add_len bytes to maintain stream alignment */
-                        if (diff_cursor + add_len > diff_region_end) {
+                        /* Apply diff values - must consume all add_len bytes to maintain stream alignment.
+                         * Use subtraction form: add_len is an untrusted varint that can be near
+                         * SIZE_MAX, so "diff_cursor + add_len" would overflow the pointer (UB) and
+                         * could wrap to below diff_region_end, defeating the bounds check. */
+                        if (add_len > (size_t)(diff_region_end - diff_cursor)) {
                             err = FSD_ERR_TRUNCATED;
                             goto error;
                         }
@@ -482,13 +485,17 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
                         err = read_varint(&diff_cursor, diff_region_end, &copy_len);
                         if (err != FSD_SUCCESS) goto error;
 
-                        /* Advance output position */
-                        out_pos += copy_len;
-                        if (out_pos > block_size) {
+                        /* Advance output position. Check against the remaining
+                         * space (block_size - out_pos) rather than computing
+                         * out_pos + copy_len: copy_len is an untrusted varint that
+                         * can be near SIZE_MAX, so the addition would wrap and could
+                         * slip past a plain "> block_size" test. */
+                        if (copy_len > block_size - out_pos) {
                             /* Malformed: copy would exceed block boundary */
                             err = FSD_ERR_CORRUPT_DATA;
                             goto error;
                         }
+                        out_pos += copy_len;
 
                         /* Detect infinite loop: both lengths zero means no progress */
                         if (add_len == 0 && copy_len == 0 && out_pos < block_size) {
@@ -533,6 +540,15 @@ fsd_error_t fsd_patch_apply(fsd_patch_ctx_t *ctx,
         if (ctx->progress_cb) {
             ctx->progress_cb(ctx->progress_user_data, dest_block, header.dest_blocks);
         }
+    }
+
+    /* The loop also exits when the op stream is exhausted (op_ptr >= op_end). A
+     * well-formed patch produces exactly dest_blocks; if fewer were produced the
+     * patch is truncated or malformed, so fail rather than write a short output
+     * file and report success. */
+    if (dest_block != header.dest_blocks) {
+        err = FSD_ERR_TRUNCATED;
+        goto error;
     }
 
     err = FSD_SUCCESS;

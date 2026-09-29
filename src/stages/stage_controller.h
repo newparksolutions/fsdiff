@@ -19,6 +19,7 @@
 #include "../core/memory_pool.h"
 #include "stage_identity.h"
 #include "stage_relocation.h"
+#include "stage_fsmap.h"
 #include "stage_partial.h"
 
 #ifdef __cplusplus
@@ -31,14 +32,17 @@ typedef struct fsd_stage_controller {
     size_t block_size;
     bool enable_identity;
     bool enable_relocation;
+    bool enable_fsmap;
     bool enable_partial;
     int verbose_identity;
     int verbose_relocation;
+    int verbose_fsmap;
     int verbose_partial;
 
     /* Stages */
     fsd_identity_stage_t *identity;
     fsd_relocation_stage_t *relocation;
+    fsd_fsmap_stage_t *fsmap;
     fsd_partial_stage_t *partial;
 
     /* Shared resources */
@@ -47,6 +51,10 @@ typedef struct fsd_stage_controller {
 
     /* State */
     FSD_ATOMIC int cancelled;
+    /* Optional external cancel flag (e.g. owned by the diff context so a
+     * caller's fsd_diff_cancel can reach a function-local controller). Checked
+     * in addition to `cancelled`. NULL when unused. Must outlive the run. */
+    const FSD_ATOMIC int *ext_cancel;
 
     /* Progress */
     fsd_progress_fn progress_cb;
@@ -114,6 +122,17 @@ void fsd_stage_controller_set_progress(fsd_stage_controller_t *ctrl,
 void fsd_stage_controller_cancel(fsd_stage_controller_t *ctrl);
 
 /**
+ * Point the controller at an external cancel flag, checked between stages in
+ * addition to the controller's own flag. Lets a caller cancel a controller it
+ * does not directly own (the flag must outlive the run). Pass NULL to clear.
+ *
+ * @param ctrl  Controller handle
+ * @param flag  Pointer to an atomic int cancel flag, or NULL
+ */
+void fsd_stage_controller_set_cancel_flag(fsd_stage_controller_t *ctrl,
+                                          const FSD_ATOMIC int *flag);
+
+/**
  * Enable verbose output for identity matching stage.
  *
  * @param ctrl     Controller handle
@@ -128,6 +147,14 @@ void fsd_stage_controller_set_verbose_identity(fsd_stage_controller_t *ctrl, int
  * @param verbose  1 to enable, 0 to disable
  */
 void fsd_stage_controller_set_verbose_relocation(fsd_stage_controller_t *ctrl, int verbose);
+
+/**
+ * Enable verbose output for the filesystem-aware matching stage.
+ *
+ * @param ctrl     Controller handle
+ * @param verbose  1 to enable, 0 to disable
+ */
+void fsd_stage_controller_set_verbose_fsmap(fsd_stage_controller_t *ctrl, int verbose);
 
 /**
  * Enable verbose output for partial matching stage.

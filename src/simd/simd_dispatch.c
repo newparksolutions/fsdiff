@@ -26,6 +26,9 @@ static void cpuid(int info[4], int leaf) {
 static void cpuidex(int info[4], int leaf, int subleaf) {
     __cpuidex(info, leaf, subleaf);
 }
+static uint64_t xgetbv0(void) {
+    return (uint64_t)_xgetbv(0);
+}
 #elif defined(__GNUC__) || defined(__clang__)
 #include <cpuid.h>
 static void cpuid(int info[4], int leaf) {
@@ -33,6 +36,11 @@ static void cpuid(int info[4], int leaf) {
 }
 static void cpuidex(int info[4], int leaf, int subleaf) {
     __cpuid_count(leaf, subleaf, info[0], info[1], info[2], info[3]);
+}
+static uint64_t xgetbv0(void) {
+    uint32_t eax, edx;
+    __asm__ volatile("xgetbv" : "=a"(eax), "=d"(edx) : "c"(0));
+    return ((uint64_t)edx << 32) | eax;
 }
 #endif
 
@@ -48,18 +56,35 @@ static fsd_simd_caps_t detect_x86_caps(void) {
         caps |= FSD_SIMD_SSE2;
     }
 
+    /* AVX/AVX2 require both the CPUID feature bit AND OS support for saving
+     * the YMM register state. The CPUID feature bit alone only means the
+     * silicon can decode the instructions; if the OS has not set XCR0.YMM
+     * (e.g. a kernel booted with "noxsave", or a hypervisor that leaves YMM
+     * state disabled) then executing a YMM instruction raises #UD -> SIGILL.
+     * Gate on CPUID.1:ECX.OSXSAVE (bit 27) and then confirm XCR0 bits 1 (SSE)
+     * and 2 (YMM) are set via XGETBV. */
+    int os_saves_ymm = 0;
+    if (info[2] & (1 << 27)) {  /* OSXSAVE */
+        uint64_t xcr0 = xgetbv0();
+        if ((xcr0 & 0x6) == 0x6) {  /* XMM (bit 1) + YMM (bit 2) state enabled */
+            os_saves_ymm = 1;
+        }
+    }
+
     /* AVX: ECX bit 28 */
-    if (info[2] & (1 << 28)) {
+    if (os_saves_ymm && (info[2] & (1 << 28))) {
         caps |= FSD_SIMD_AVX;
     }
 
     /* Check for AVX2 */
-    cpuid(info, 0);
-    if (info[0] >= 7) {
-        cpuidex(info, 7, 0);
-        /* AVX2: EBX bit 5 */
-        if (info[1] & (1 << 5)) {
-            caps |= FSD_SIMD_AVX2;
+    if (os_saves_ymm) {
+        cpuid(info, 0);
+        if (info[0] >= 7) {
+            cpuidex(info, 7, 0);
+            /* AVX2: EBX bit 5 */
+            if (info[1] & (1 << 5)) {
+                caps |= FSD_SIMD_AVX2;
+            }
         }
     }
 

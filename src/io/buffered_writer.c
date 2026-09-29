@@ -177,11 +177,18 @@ fsd_error_t fsd_writer_close(fsd_buffered_writer_t *writer) {
     fsd_error_t err = fsd_writer_flush(writer);
 
     if (writer->file) {
-        /* Always flush the FILE* stream to ensure data reaches disk */
-        fflush(writer->file);
+        /* fsd_writer_flush only moves bytes into stdio's buffer; the actual
+         * write(2) happens here. Capture fflush/fclose failures (e.g. ENOSPC)
+         * so a failed disk write is reported instead of silently returning
+         * success with a truncated file. Preserve the earliest error. */
+        if (fflush(writer->file) != 0 && err == FSD_SUCCESS) {
+            err = FSD_ERR_IO;
+        }
 
         if (writer->owns_file) {
-            fclose(writer->file);
+            if (fclose(writer->file) != 0 && err == FSD_SUCCESS) {
+                err = FSD_ERR_IO;
+            }
         }
     }
 

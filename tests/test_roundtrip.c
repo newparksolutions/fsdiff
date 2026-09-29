@@ -320,6 +320,140 @@ static int test_relocated_blocks(void) {
     return 0;
 }
 
+/* Relocation depends on the CRC32s the identity stage computes, so the
+ * library must reject relocation-without-identity instead of silently
+ * producing a patch with no relocations. */
+static int test_relocation_requires_identity(void) {
+    printf("  Testing relocation-without-identity rejection...\n");
+
+    size_t size = 4096 * 2;
+    uint8_t *data = calloc(1, size);
+    TEST_ASSERT(data, "alloc");
+    create_file(src_file, data, size);
+    create_file(dest_file, data, size);
+    free(data);
+
+    fsd_diff_options_t opts;
+    fsd_diff_options_init(&opts);
+    opts.enable_identity = false;
+    opts.enable_relocation = true;
+
+    fsd_diff_ctx_t *diff_ctx = NULL;
+    TEST_ASSERT(fsd_diff_create(&diff_ctx, &opts) == FSD_SUCCESS,
+                "context creation succeeds");
+    fsd_error_t err = fsd_diff_files(diff_ctx, src_file, dest_file, patch_file);
+    TEST_ASSERT(err == FSD_ERR_INVALID_ARG,
+                "relocation without identity is rejected");
+    fsd_diff_destroy(diff_ctx);
+
+    /* Disabling both is fine */
+    opts.enable_relocation = false;
+    TEST_ASSERT(fsd_diff_create(&diff_ctx, &opts) == FSD_SUCCESS,
+                "context creation succeeds");
+    err = fsd_diff_files(diff_ctx, src_file, dest_file, patch_file);
+    TEST_ASSERT(err == FSD_SUCCESS, "identity and relocation both off is accepted");
+    fsd_diff_destroy(diff_ctx);
+
+    cleanup();
+    return 0;
+}
+
+/* Diff+apply helper for the fsmap test: returns patch size, or -1 on any
+ * failure (asserts are in the caller for clearer messages). */
+static long diff_apply_size(const char *src, const char *dest,
+                            const char *patch, const char *out,
+                            bool enable_fsmap) {
+    fsd_diff_ctx_t *diff_ctx = NULL;
+    fsd_diff_options_t opts;
+    fsd_diff_options_init(&opts);
+    opts.enable_fsmap = enable_fsmap;
+    if (fsd_diff_create(&diff_ctx, &opts) != FSD_SUCCESS) return -1;
+    fsd_error_t err = fsd_diff_files(diff_ctx, src, dest, patch);
+    fsd_diff_destroy(diff_ctx);
+    if (err != FSD_SUCCESS) return -1;
+
+    fsd_patch_ctx_t *patch_ctx = NULL;
+    if (fsd_patch_create(&patch_ctx, NULL) != FSD_SUCCESS) return -1;
+    err = fsd_patch_apply(patch_ctx, src, patch, out);
+    fsd_patch_destroy(patch_ctx);
+    if (err != FSD_SUCCESS) return -1;
+
+    FILE *f = fopen(patch, "rb");
+    if (!f) return -1;
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fclose(f);
+    return size;
+}
+
+/* Filesystem-aware matching on a real ext4 pair built with mkfs.ext4:
+ * both patches must reconstruct the destination byte-identically and the
+ * fsmap-enabled patch must not be larger. Skipped without mkfs.ext4. */
+static int test_fsmap_ext4_pair(void) {
+    printf("  Testing fsmap on an ext4 pair...\n");
+#ifdef _WIN32
+    printf("    SKIP: requires mkfs.ext4\n");
+    return 0;
+#else
+    if (system("command -v mkfs.ext4 > /dev/null 2>&1") != 0) {
+        printf("    SKIP: mkfs.ext4 not available\n");
+        return 0;
+    }
+
+    char tree[600], cmd[2048];
+    snprintf(tree, sizeof(tree), "%s/fsdiff_test_tree", temp_dir);
+
+    /* Source tree: two files of pseudo-random data */
+    snprintf(cmd, sizeof(cmd),
+             "rm -rf %s '%s' '%s' && mkdir -p %s/dir && "
+             "head -c 262144 /dev/urandom > %s/dir/app.bin && "
+             "head -c  65536 /dev/urandom > %s/config.dat && "
+             "mkfs.ext4 -q -F -b 4096 -d %s '%s' 8M > /dev/null 2>&1",
+             tree, src_file, dest_file, tree, tree, tree, tree, src_file);
+    if (system(cmd) != 0) {
+        printf("    SKIP: fixture build failed\n");
+        return 0;
+    }
+    /* Dest tree: app.bin modified in the middle (partial matches at the
+     * same path), config.dat unchanged, one new file (literals) */
+    snprintf(cmd, sizeof(cmd),
+             "dd if=/dev/urandom of=%s/dir/app.bin bs=1 seek=100000 "
+             "count=9000 conv=notrunc status=none && "
+             "head -c 30000 /dev/urandom > %s/new.bin && "
+             "mkfs.ext4 -q -F -b 4096 -d %s '%s' 8M > /dev/null 2>&1",
+             tree, tree, tree, dest_file);
+    if (system(cmd) != 0) {
+        printf("    SKIP: dest fixture build failed\n");
+        return 0;
+    }
+
+    char out2[600], patch2[600];
+    snprintf(out2, sizeof(out2), "%s/fsdiff_test_out2.bin", temp_dir);
+    snprintf(patch2, sizeof(patch2), "%s/fsdiff_test2.patch", temp_dir);
+
+    long with_fsmap = diff_apply_size(src_file, dest_file,
+                                      patch_file, output_file, true);
+    TEST_ASSERT(with_fsmap > 0, "fsmap diff+apply should succeed");
+    TEST_ASSERT(compare_files(dest_file, output_file) == 0,
+                "fsmap patch output should match destination");
+
+    long without = diff_apply_size(src_file, dest_file, patch2, out2, false);
+    TEST_ASSERT(without > 0, "no-fsmap diff+apply should succeed");
+    TEST_ASSERT(compare_files(dest_file, out2) == 0,
+                "no-fsmap patch output should match destination");
+
+    TEST_ASSERT(with_fsmap <= without,
+                "fsmap patch should not be larger");
+
+    char cleanup_cmd[2048];
+    snprintf(cleanup_cmd, sizeof(cleanup_cmd), "rm -rf %s '%s' '%s'",
+             tree, out2, patch2);
+    if (system(cleanup_cmd) != 0) { /* best-effort cleanup */ }
+    cleanup();
+    return 0;
+#endif
+}
+
 int main(void) {
     int failures = 0;
 
@@ -340,6 +474,8 @@ int main(void) {
     failures += test_zero_blocks();
     failures += test_one_blocks();
     failures += test_relocated_blocks();
+    failures += test_relocation_requires_identity();
+    failures += test_fsmap_ext4_pair();
 
     fsd_cleanup();
 

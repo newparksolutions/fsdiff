@@ -21,8 +21,11 @@ set(FSDIFF_DIFF_SOURCES
     io/buffered_writer.c
     stages/stage_identity.c
     stages/stage_relocation.c
+    stages/stage_fsmap.c
     stages/stage_partial.c
     stages/stage_controller.c
+    stages/block_search.c
+    fs/ext_reader.c
     encoding/operation_encoder.c
     diff.c
 )
