@@ -1,0 +1,46 @@
+# libFuzzer / AFL dictionary for fuzz_patch.
+# First byte of an op: [type:3][count_enc:2][flags:3].
+
+magic="BKDF"
+header_v1_bs4096="BKDF\x01\x0c\x00\x00"
+header_v1_bs32="BKDF\x01\x05\x00\x00"
+
+# COPY_IDENTITY (0): count_enc 0..3
+op_ident_c1="\x00"
+op_ident_c2="\x08"
+op_ident_c4="\x10"
+op_ident_inline8="\x1f"
+
+# COPY_RELOCATE (1): offset_enc 0..2, sign
+op_reloc_o1_pos="\x20"
+op_reloc_o1_neg="\x21"
+op_reloc_o2_pos="\x22"
+op_reloc_o4_neg="\x25"
+op_reloc_c4_o4="\x34"
+
+# ZERO (2) / ONE (3)
+op_zero_inline="\x58"
+op_zero_c4="\x50"
+op_one_inline="\x78"
+op_one_c2="\x68"
+
+# COPY_ADD (4): offset_enc 0..2, diff_fmt dense/sparse
+op_add_dense_o2="\x80"
+op_add_sparse_o2="\x81"
+op_add_dense_o3="\x82"
+op_add_sparse_o4="\x85"
+op_add_c2_sparse="\x89"
+op_add_inline_invalid="\x98"
+
+# LITERAL (5) / reserved (6, 7)
+op_lit_inline="\xb8"
+op_lit_c1="\xa0"
+op_reserved6="\xc0"
+op_reserved7="\xe0"
+
+# Varints and boundary values
+varint_128="\x80\x01"
+varint_4096="\x80\x20"
+varint_max="\xff\xff\xff\xff\xff\xff\xff\xff\xff\x01"
+u32_max="\xff\xff\xff\xff"
+u32_min_neg="\x00\x00\x00\x80"

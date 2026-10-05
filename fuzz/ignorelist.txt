@@ -1,0 +1,9 @@
+# Sanitizer and coverage ignorelist for the fuzz builds.
+#
+# The differ's partial-match sweep spends ~90% of fuzz_roundtrip's time in
+# the byte-counting kernels, which instrumentation slows roughly 40x. The
+# patcher does not use these kernels and the differ is not the primary
+# target, so leave them uninstrumented.
+src:*/src/simd/simd_scalar.c
+src:*/src/simd/simd_avx2.c
+src:*/src/simd/simd_neon.c
